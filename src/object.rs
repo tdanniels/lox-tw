@@ -9,8 +9,8 @@ pub enum Object {
 impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Object::String(x) => write!(f, "String(\"{}\")", x),
-            Object::Number(x) => write!(f, "Number({})", x),
+            Object::String(x) => write!(f, "\"{}\"", x),
+            Object::Number(x) => write!(f, "{}", x),
         }
     }
 }
