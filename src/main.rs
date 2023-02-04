@@ -1,5 +1,7 @@
+mod expr;
 mod lox;
 mod object;
+mod pretty_printer;
 mod scanner;
 mod token;
 mod token_type;

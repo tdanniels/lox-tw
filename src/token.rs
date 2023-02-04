@@ -5,10 +5,10 @@ use std::fmt;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token {
-    type_: TokenType,
-    lexeme: String,
-    literal: Option<Object>,
-    line: usize,
+    pub type_: TokenType,
+    pub lexeme: String,
+    pub literal: Option<Object>,
+    pub line: usize,
 }
 
 impl Token {
