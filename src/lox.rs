@@ -16,7 +16,7 @@ impl Lox {
         Self { had_error: false }
     }
 
-    pub fn run_file(self: &mut Self, path: &str) -> Result<()> {
+    pub fn run_file(&mut self, path: &str) -> Result<()> {
         let bytes = fs::read(path)?;
         self.run(&String::from_utf8(bytes)?);
         if self.had_error {
@@ -25,7 +25,7 @@ impl Lox {
         Ok(())
     }
 
-    pub fn run_prompt(self: &mut Self) -> Result<()> {
+    pub fn run_prompt(&mut self) -> Result<()> {
         let mut line = String::new();
         loop {
             print!("> ");
@@ -42,7 +42,7 @@ impl Lox {
         Ok(())
     }
 
-    fn run(self: &mut Self, source: &str) {
+    fn run(&mut self, source: &str) {
         let mut scanner = Scanner::new(source, |l, m| self.error(l, m));
         let tokens = scanner.scan_tokens();
 
@@ -51,11 +51,11 @@ impl Lox {
         }
     }
 
-    pub fn error(self: &mut Self, line: usize, message: &str) {
+    pub fn error(&mut self, line: usize, message: &str) {
         self.report(line, "", message);
     }
 
-    fn report(self: &mut Self, line: usize, where_: &str, message: &str) {
+    fn report(&mut self, line: usize, where_: &str, message: &str) {
         eprintln!("[line {line}] Error{where_}: {message}");
         self.had_error = true;
     }

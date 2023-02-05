@@ -17,13 +17,14 @@ fn main() -> Result<()> {
     let mut lox = Lox::new();
     let args: Vec<_> = env::args().collect();
 
-    if args.len() > 2 {
-        eprintln!("Usage: lox-tw [script]");
-        process::exit(64);
-    } else if args.len() == 2 {
-        lox.run_file(&args[0])?;
-    } else {
-        lox.run_prompt()?;
+    match args.len() {
+        1 => lox.run_prompt()?,
+        2 => lox.run_file(&args[0])?,
+        _ => {
+            eprintln!("Usage: lox-tw [script]");
+            process::exit(64);
+        }
     }
+
     Ok(())
 }

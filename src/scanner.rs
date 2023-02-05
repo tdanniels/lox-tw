@@ -1,26 +1,26 @@
 use crate::object::Object;
 use crate::token::Token;
-use crate::token_type::TokenType::{self, *};
+use crate::token_type::TokenType::{self, self as TT};
 
 use phf::phf_map;
 
 static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
-    "and" => AND,
-    "class" => CLASS,
-    "else" => ELSE,
-    "false" => FALSE,
-    "for" => FOR,
-    "fun" => FUN,
-    "if" => IF,
-    "nil" => NIL,
-    "or" => OR,
-    "print" => PRINT,
-    "return" => RETURN,
-    "super" => SUPER,
-    "this" => THIS,
-    "true" => TRUE,
-    "var" => VAR,
-    "while" => WHILE
+    "and" => TT::And,
+    "class" => TT::Class,
+    "else" => TT::Else,
+    "false" => TT::False,
+    "for" => TT::For,
+    "fun" => TT::Fun,
+    "if" => TT::If,
+    "nil" => TT::Nil,
+    "or" => TT::Or,
+    "print" => TT::Print,
+    "return" => TT::Return,
+    "super" => TT::Super,
+    "this" => TT::This,
+    "true" => TT::True,
+    "var" => TT::Var,
+    "while" => TT::While
 };
 
 pub struct Scanner<F>
@@ -36,11 +36,11 @@ where
 }
 
 fn is_digit(c: u8) -> bool {
-    c >= b'0' && c <= b'9'
+    (b'0'..=b'9').contains(&c)
 }
 
 fn is_alpha(c: u8) -> bool {
-    (c >= b'a' && c <= b'z') || (c >= b'A' && c <= b'Z') || c == b'_'
+    (b'a'..=b'z').contains(&c) || (b'A'..=b'Z').contains(&c) || c == b'_'
 }
 
 fn is_alpha_numeric(c: u8) -> bool {
@@ -70,38 +70,38 @@ where
             self.scan_token();
         }
 
-        self.tokens.push(Token::new(EOF, "", None, self.line));
+        self.tokens.push(Token::new(TT::Eof, "", None, self.line));
         &self.tokens
     }
 
     fn scan_token(&mut self) {
         let c: u8 = self.advance();
         match c {
-            b'(' => self.add_token(LEFT_PAREN),
-            b')' => self.add_token(RIGHT_PAREN),
-            b'{' => self.add_token(LEFT_BRACE),
-            b'}' => self.add_token(RIGHT_BRACE),
-            b',' => self.add_token(COMMA),
-            b'.' => self.add_token(DOT),
-            b'-' => self.add_token(MINUS),
-            b'+' => self.add_token(PLUS),
-            b';' => self.add_token(SEMICOLON),
-            b'*' => self.add_token(STAR),
+            b'(' => self.add_token(TT::LeftParen),
+            b')' => self.add_token(TT::RightParen),
+            b'{' => self.add_token(TT::LeftBrace),
+            b'}' => self.add_token(TT::RightBrace),
+            b',' => self.add_token(TT::Comma),
+            b'.' => self.add_token(TT::Dot),
+            b'-' => self.add_token(TT::Minus),
+            b'+' => self.add_token(TT::Plus),
+            b';' => self.add_token(TT::Semicolon),
+            b'*' => self.add_token(TT::Star),
             b'!' => {
                 let m = self.match_(b'=');
-                self.add_token(if m { BANG_EQUAL } else { BANG })
+                self.add_token(if m { TT::BangEqual } else { TT::Bang })
             }
             b'=' => {
                 let m = self.match_(b'=');
-                self.add_token(if m { EQUAL_EQUAL } else { EQUAL })
+                self.add_token(if m { TT::EqualEqual } else { TT::Equal })
             }
             b'<' => {
                 let m = self.match_(b'=');
-                self.add_token(if m { LESS_EQUAL } else { LESS })
+                self.add_token(if m { TT::LessEqual } else { TT::Less })
             }
             b'>' => {
                 let m = self.match_(b'=');
-                self.add_token(if m { GREATER_EQUAL } else { GREATER })
+                self.add_token(if m { TT::GreaterEqual } else { TT::Greater })
             }
             b'/' => {
                 if self.match_(b'/') {
@@ -109,7 +109,7 @@ where
                         self.advance();
                     }
                 } else {
-                    self.add_token(SLASH);
+                    self.add_token(TT::Slash);
                 }
             }
             b' ' | b'\r' | b'\t' => {}
@@ -126,7 +126,7 @@ where
             self.advance();
         }
         let text = &self.source[self.start..self.current];
-        let type_ = *KEYWORDS.get(text).unwrap_or(&IDENTIFIER);
+        let type_ = *KEYWORDS.get(text).unwrap_or(&TT::Identifier);
         self.add_token(type_);
     }
 
@@ -143,7 +143,7 @@ where
             }
         }
         self.add_token_literal(
-            NUMBER,
+            TT::Number,
             Some(Object::Number(
                 self.source[self.start..self.current]
                     .parse()
@@ -168,7 +168,7 @@ where
         self.advance();
 
         let value = self.source[self.start + 1..self.current - 1].to_owned();
-        self.add_token_literal(STRING, Some(Object::String(value)));
+        self.add_token_literal(TT::String, Some(Object::String(value)));
     }
 
     fn match_(&mut self, expected: u8) -> bool {
@@ -180,7 +180,7 @@ where
         }
 
         self.current += 1;
-        return true;
+        true
     }
 
     fn peek(&self) -> u8 {
@@ -237,27 +237,35 @@ mod test {
             scanner.scan_tokens().clone()
         };
         assert_eq!(error_count, 0);
-        assert_eq!(tokens, vec![
-            Token::new(VAR, "var", None, 1),
-            Token::new(IDENTIFIER, "a", None, 1),
-            Token::new(EQUAL, "=", None, 1),
-            Token::new(NUMBER, "1", Some(Object::Number(1.0)), 1),
-            Token::new(SEMICOLON, ";", None, 1),
-            Token::new(VAR, "var", None, 1),
-            Token::new(IDENTIFIER, "b", None, 1),
-            Token::new(EQUAL, "=", None, 1),
-            Token::new(STRING, "\"2\"", Some(Object::String("2".to_string())), 1),
-            Token::new(SEMICOLON, ";", None, 1),
-            Token::new(PRINT, "print", None, 2),
-            Token::new(IDENTIFIER, "a", None, 2),
-            Token::new(PLUS, "+", None, 2),
-            Token::new(NUMBER, "2.5", Some(Object::Number(2.5)), 2),
-            Token::new(SEMICOLON, ";", None, 2),
-            Token::new(PRINT, "print", None, 2),
-            Token::new(IDENTIFIER, "b", None, 2),
-            Token::new(SEMICOLON, ";", None, 2),
-            Token::new(EOF, "", None, 2),
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::new(TT::Var, "var", None, 1),
+                Token::new(TT::Identifier, "a", None, 1),
+                Token::new(TT::Equal, "=", None, 1),
+                Token::new(TT::Number, "1", Some(Object::Number(1.0)), 1),
+                Token::new(TT::Semicolon, ";", None, 1),
+                Token::new(TT::Var, "var", None, 1),
+                Token::new(TT::Identifier, "b", None, 1),
+                Token::new(TT::Equal, "=", None, 1),
+                Token::new(
+                    TT::String,
+                    "\"2\"",
+                    Some(Object::String("2".to_string())),
+                    1
+                ),
+                Token::new(TT::Semicolon, ";", None, 1),
+                Token::new(TT::Print, "print", None, 2),
+                Token::new(TT::Identifier, "a", None, 2),
+                Token::new(TT::Plus, "+", None, 2),
+                Token::new(TT::Number, "2.5", Some(Object::Number(2.5)), 2),
+                Token::new(TT::Semicolon, ";", None, 2),
+                Token::new(TT::Print, "print", None, 2),
+                Token::new(TT::Identifier, "b", None, 2),
+                Token::new(TT::Semicolon, ";", None, 2),
+                Token::new(TT::Eof, "", None, 2),
+            ]
+        );
     }
 
     #[test]

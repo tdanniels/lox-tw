@@ -42,10 +42,10 @@ mod test {
     fn print_exprs() {
         let expr = Binary::make(
             Unary::make(
-                Token::new(TokenType::MINUS, "-", None, 1),
+                Token::new(TokenType::Minus, "-", None, 1),
                 Literal::make(Some(Object::Number(123.0))),
             ),
-            Token::new(TokenType::STAR, "*", None, 1),
+            Token::new(TokenType::Star, "*", None, 1),
             Grouping::make(Literal::make(Some(Object::Number(45.67)))),
         );
         assert_eq!(visit(&expr).as_str(), "(* (- 123) (group 45.67))");
