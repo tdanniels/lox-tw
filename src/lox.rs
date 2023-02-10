@@ -1,4 +1,8 @@
+use crate::parser::Parser;
+use crate::pretty_printer::AstPrinter;
 use crate::scanner::Scanner;
+use crate::token::Token;
+use crate::token_type::TokenType;
 
 use std::fs;
 use std::io;
@@ -44,20 +48,41 @@ impl Lox {
     }
 
     fn run(&mut self, source: &str) {
-        let mut scanner = Scanner::new(source, |l, m| self.error(l, m));
-        let tokens = scanner.scan_tokens();
+        let tokens = {
+            let mut scanner = Scanner::new(source, |l, m| self.line_error(l, m));
+            scanner.scan_tokens()
+        };
 
-        for token in tokens {
-            println!("{token}");
+        let expr = {
+            let mut parser = Parser::new(&tokens, |t, m| self.token_error(t, m));
+            parser.parse().expect("Unexpected parse error.")
+        };
+
+        if self.had_error {
+            return;
         }
+
+        println!("{}", AstPrinter::print(&expr.unwrap()))
     }
 
-    pub fn error(&mut self, line: usize, message: &str) {
+    pub fn line_error(&mut self, line: usize, message: &str) {
         self.report(line, "", message);
     }
 
     fn report(&mut self, line: usize, where_: &str, message: &str) {
         eprintln!("[line {line}] Error{where_}: {message}");
         self.had_error = true;
+    }
+
+    pub fn token_error(&mut self, token: &Token, message: &str) {
+        if token.type_ == TokenType::Eof {
+            self.report(token.line, " at end", message);
+        } else {
+            self.report(
+                token.line,
+                &(" at '".to_owned() + &token.lexeme + "'"),
+                message,
+            );
+        }
     }
 }
