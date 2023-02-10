@@ -38,6 +38,7 @@ impl Lox {
                 }
                 Err(error) => eprintln!("IO error: {error}"),
             }
+            line.clear();
         }
         Ok(())
     }
