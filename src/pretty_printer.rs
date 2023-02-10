@@ -16,17 +16,19 @@ macro_rules! parenthesize {
     };
 }
 
-pub fn visit(expr: &Expr) -> String {
+pub struct AstPrinter;
+
+impl AstPrinter {
+    pub fn print(expr: &Expr) -> String {
+        visit(expr)
+    }
+}
+
+fn visit(expr: &Expr) -> String {
     match expr {
         Expr::Binary(ex) => parenthesize!(&ex.operator.lexeme, &ex.left, &ex.right),
         Expr::Grouping(ex) => parenthesize!("group", &ex.expression),
-        Expr::Literal(ex) => {
-            if let Some(v) = &ex.value {
-                v.to_string()
-            } else {
-                "nil".to_string()
-            }
-        }
+        Expr::Literal(ex) => ex.value.to_string(),
         Expr::Unary(ex) => parenthesize!(&ex.operator.lexeme, &ex.right),
     }
 }
@@ -42,12 +44,15 @@ mod test {
     fn print_exprs() {
         let expr = Binary::make(
             Unary::make(
-                Token::new(TokenType::Minus, "-", None, 1),
-                Literal::make(Some(Object::Number(123.0))),
+                Token::new(TokenType::Minus, "-", Object::Nil, 1),
+                Literal::make(Object::Number(123.0)),
             ),
-            Token::new(TokenType::Star, "*", None, 1),
-            Grouping::make(Literal::make(Some(Object::Number(45.67)))),
+            Token::new(TokenType::Star, "*", Object::Nil, 1),
+            Grouping::make(Literal::make(Object::Number(45.67))),
         );
-        assert_eq!(visit(&expr).as_str(), "(* (- 123) (group 45.67))");
+        assert_eq!(
+            AstPrinter::print(&expr).as_str(),
+            "(* (- 123) (group 45.67))"
+        );
     }
 }

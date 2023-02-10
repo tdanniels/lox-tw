@@ -12,6 +12,7 @@ use crate::token::Token;
 ///   a Box<Expr(S)>>.
 macro_rules! expr_struct {
     ($expr: ident, $($field: ident, $type: ty),*) => {
+        #[derive(Debug)]
         pub struct $expr {
             $(
                 pub $field: $type,
@@ -32,11 +33,12 @@ macro_rules! expr_struct {
 
 expr_struct!(Binary, left, Box<Expr>, operator, Token, right, Box<Expr>);
 expr_struct!(Grouping, expression, Box<Expr>);
-expr_struct!(Literal, value, Option<Object>);
+expr_struct!(Literal, value, Object);
 expr_struct!(Unary, operator, Token, right, Box<Expr>);
 
 macro_rules! expr_enum {
     ($($expr: ident),*) => {
+        #[derive(Debug)]
         pub enum Expr {
             $(
                 $expr($expr),

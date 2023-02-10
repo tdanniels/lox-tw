@@ -64,14 +64,15 @@ where
         }
     }
 
-    pub fn scan_tokens(&mut self) -> &Vec<Token> {
+    pub fn scan_tokens(&mut self) -> Vec<Token> {
         while !self.is_at_end() {
             self.start = self.current;
             self.scan_token();
         }
 
-        self.tokens.push(Token::new(TT::Eof, "", None, self.line));
-        &self.tokens
+        self.tokens
+            .push(Token::new(TT::Eof, "", Object::Nil, self.line));
+        self.tokens.clone()
     }
 
     fn scan_token(&mut self) {
@@ -144,11 +145,11 @@ where
         }
         self.add_token_literal(
             TT::Number,
-            Some(Object::Number(
+            Object::Number(
                 self.source[self.start..self.current]
                     .parse()
                     .expect("BUG: failed to parse Number."),
-            )),
+            ),
         );
     }
 
@@ -168,7 +169,7 @@ where
         self.advance();
 
         let value = self.source[self.start + 1..self.current - 1].to_owned();
-        self.add_token_literal(TT::String, Some(Object::String(value)));
+        self.add_token_literal(TT::String, Object::String(value));
     }
 
     fn match_(&mut self, expected: u8) -> bool {
@@ -207,10 +208,10 @@ where
     }
 
     fn add_token(&mut self, type_: TokenType) {
-        self.add_token_literal(type_, None);
+        self.add_token_literal(type_, Object::Nil);
     }
 
-    fn add_token_literal(&mut self, type_: TokenType, literal: Option<Object>) {
+    fn add_token_literal(&mut self, type_: TokenType, literal: Object) {
         let text = &self.source.as_bytes()[self.start..self.current];
         self.tokens.push(Token::new(
             type_,
@@ -240,30 +241,25 @@ mod test {
         assert_eq!(
             tokens,
             vec![
-                Token::new(TT::Var, "var", None, 1),
-                Token::new(TT::Identifier, "a", None, 1),
-                Token::new(TT::Equal, "=", None, 1),
-                Token::new(TT::Number, "1", Some(Object::Number(1.0)), 1),
-                Token::new(TT::Semicolon, ";", None, 1),
-                Token::new(TT::Var, "var", None, 1),
-                Token::new(TT::Identifier, "b", None, 1),
-                Token::new(TT::Equal, "=", None, 1),
-                Token::new(
-                    TT::String,
-                    "\"2\"",
-                    Some(Object::String("2".to_string())),
-                    1
-                ),
-                Token::new(TT::Semicolon, ";", None, 1),
-                Token::new(TT::Print, "print", None, 2),
-                Token::new(TT::Identifier, "a", None, 2),
-                Token::new(TT::Plus, "+", None, 2),
-                Token::new(TT::Number, "2.5", Some(Object::Number(2.5)), 2),
-                Token::new(TT::Semicolon, ";", None, 2),
-                Token::new(TT::Print, "print", None, 2),
-                Token::new(TT::Identifier, "b", None, 2),
-                Token::new(TT::Semicolon, ";", None, 2),
-                Token::new(TT::Eof, "", None, 2),
+                Token::new(TT::Var, "var", Object::Nil, 1),
+                Token::new(TT::Identifier, "a", Object::Nil, 1),
+                Token::new(TT::Equal, "=", Object::Nil, 1),
+                Token::new(TT::Number, "1", Object::Number(1.0), 1),
+                Token::new(TT::Semicolon, ";", Object::Nil, 1),
+                Token::new(TT::Var, "var", Object::Nil, 1),
+                Token::new(TT::Identifier, "b", Object::Nil, 1),
+                Token::new(TT::Equal, "=", Object::Nil, 1),
+                Token::new(TT::String, "\"2\"", Object::String("2".to_string()), 1),
+                Token::new(TT::Semicolon, ";", Object::Nil, 1),
+                Token::new(TT::Print, "print", Object::Nil, 2),
+                Token::new(TT::Identifier, "a", Object::Nil, 2),
+                Token::new(TT::Plus, "+", Object::Nil, 2),
+                Token::new(TT::Number, "2.5", Object::Number(2.5), 2),
+                Token::new(TT::Semicolon, ";", Object::Nil, 2),
+                Token::new(TT::Print, "print", Object::Nil, 2),
+                Token::new(TT::Identifier, "b", Object::Nil, 2),
+                Token::new(TT::Semicolon, ";", Object::Nil, 2),
+                Token::new(TT::Eof, "", Object::Nil, 2),
             ]
         );
     }
