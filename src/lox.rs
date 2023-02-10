@@ -44,6 +44,9 @@ impl Lox {
             }
             line.clear();
         }
+
+        // Don't leave a dangling prompt line on exit.
+        println!();
         Ok(())
     }
 
