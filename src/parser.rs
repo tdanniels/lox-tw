@@ -178,6 +178,7 @@ where
         ParseError
     }
 
+    #[allow(unused)]
     fn synchronize(&mut self) {
         self.advance();
 

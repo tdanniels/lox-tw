@@ -16,14 +16,17 @@ macro_rules! parenthesize {
     };
 }
 
+#[allow(unused)]
 pub struct AstPrinter;
 
 impl AstPrinter {
+    #[allow(unused)]
     pub fn print(expr: &Expr) -> String {
         visit(expr)
     }
 }
 
+#[allow(unused)]
 fn visit(expr: &Expr) -> String {
     match expr {
         Expr::Binary(ex) => parenthesize!(&ex.operator.lexeme, &ex.left, &ex.right),
