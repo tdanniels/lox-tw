@@ -1,4 +1,5 @@
 mod expr;
+mod generate_ast;
 mod interpreter;
 mod lox;
 mod object;
@@ -6,6 +7,7 @@ mod parser;
 mod pretty_printer;
 mod runtime_error;
 mod scanner;
+mod stmt;
 mod token;
 mod token_type;
 
