@@ -13,43 +13,23 @@ use std::process;
 use anyhow::Result;
 
 pub struct Lox {
-    lox: LoxInternal,
-    interpreter: Interpreter,
+    had_error: RefCell<bool>,
+    had_runtime_error: RefCell<bool>,
+    interpreter: RefCell<Interpreter>,
 }
 
 impl Lox {
     pub fn new() -> Self {
         Self {
-            lox: LoxInternal::new(),
-            interpreter: Interpreter::new(),
+            had_error: false.into(),
+            had_runtime_error: false.into(),
+            interpreter: Interpreter::new().into(),
         }
     }
 
     pub fn run_file(&mut self, path: &str) -> Result<()> {
-        self.lox.run_file(path, &mut self.interpreter)
-    }
-
-    pub fn run_prompt(&mut self) -> Result<()> {
-        self.lox.run_prompt(&mut self.interpreter)
-    }
-}
-
-pub struct LoxInternal {
-    had_error: RefCell<bool>,
-    had_runtime_error: RefCell<bool>,
-}
-
-impl LoxInternal {
-    fn new() -> Self {
-        Self {
-            had_error: false.into(),
-            had_runtime_error: false.into(),
-        }
-    }
-
-    fn run_file(&mut self, path: &str, interpreter: &mut Interpreter) -> Result<()> {
         let bytes = fs::read(path)?;
-        self.run(&String::from_utf8(bytes)?, interpreter);
+        self.run(&String::from_utf8(bytes)?);
         if *self.had_error.borrow() {
             process::exit(65);
         }
@@ -59,7 +39,7 @@ impl LoxInternal {
         Ok(())
     }
 
-    fn run_prompt(&self, interpreter: &mut Interpreter) -> Result<()> {
+    pub fn run_prompt(&self) -> Result<()> {
         let mut line = String::new();
         loop {
             print!("> ");
@@ -67,7 +47,7 @@ impl LoxInternal {
             match io::stdin().read_line(&mut line) {
                 Ok(0) => break,
                 Ok(_) => {
-                    self.run(&line, interpreter);
+                    self.run(&line);
                     *self.had_error.borrow_mut() = false
                 }
                 Err(error) => eprintln!("IO error: {error}"),
@@ -80,7 +60,7 @@ impl LoxInternal {
         Ok(())
     }
 
-    fn run(&self, source: &str, interpreter: &mut Interpreter) {
+    fn run(&self, source: &str) {
         let tokens = Scanner::new(source, |l, m| self.line_error(l, m)).scan_tokens();
 
         let expression = Parser::new(&tokens, |t, m| self.token_error(t, m))
@@ -91,7 +71,9 @@ impl LoxInternal {
             return;
         }
 
-        interpreter.interpret(&expression.unwrap(), |e| self.runtime_error(e));
+        self.interpreter
+            .borrow_mut()
+            .interpret(&expression.unwrap(), |e| self.runtime_error(e));
     }
 
     fn line_error(&self, line: usize, message: &str) {
