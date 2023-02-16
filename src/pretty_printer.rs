@@ -45,13 +45,14 @@ mod test {
 
     #[test]
     fn print_exprs() {
+        let minus = Token::new(TokenType::Minus, "-", Object::Nil, 1);
+        let star = Token::new(TokenType::Star, "*", Object::Nil, 1);
+        let num123 = Object::Number(123.0);
+        let num4567 = Object::Number(45.67);
         let expr = Binary::make(
-            Unary::make(
-                Token::new(TokenType::Minus, "-", Object::Nil, 1),
-                Literal::make(Object::Number(123.0)),
-            ),
-            Token::new(TokenType::Star, "*", Object::Nil, 1),
-            Grouping::make(Literal::make(Object::Number(45.67))),
+            Unary::make(&minus, Literal::make(&num123)),
+            &star,
+            Grouping::make(Literal::make(&num4567)),
         );
         assert_eq!(
             AstPrinter::print(&expr).as_str(),

@@ -3,16 +3,17 @@ use crate::token::Token;
 
 crate::ast_struct!(
     Expr,
+    'a,
     Binary,
     left,
-    Box<Expr>,
+    Box<Expr<'a>>,
     operator,
-    Token,
+    &'a Token,
     right,
-    Box<Expr>
+    Box<Expr<'a>>
 );
-crate::ast_struct!(Expr, Grouping, expression, Box<Expr>);
-crate::ast_struct!(Expr, Literal, value, Object);
-crate::ast_struct!(Expr, Unary, operator, Token, right, Box<Expr>);
+crate::ast_struct!(Expr, 'a, Grouping, expression, Box<Expr<'a>>);
+crate::ast_struct!(Expr, 'a, Literal, value, &'a Object);
+crate::ast_struct!(Expr, 'a, Unary, operator, &'a Token, right, Box<Expr<'a>>);
 
-crate::ast_enum!(Expr, Binary, Grouping, Literal, Unary);
+crate::ast_enum!(Expr, 'a, Binary, Grouping, Literal, Unary);

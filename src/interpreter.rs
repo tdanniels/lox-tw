@@ -46,23 +46,23 @@ impl Interpreter {
             TT::BangEqual => Ok(OBoolean(!Self::is_equal(&left, &right))),
             TT::EqualEqual => Ok(OBoolean(Self::is_equal(&left, &right))),
             TT::Greater => {
-                Self::check_number_operands(&expr.operator, &left, &right)?;
+                Self::check_number_operands(expr.operator, &left, &right)?;
                 Ok(OBoolean(f64::try_from(left)? > f64::try_from(right)?))
             }
             TT::GreaterEqual => {
-                Self::check_number_operands(&expr.operator, &left, &right)?;
+                Self::check_number_operands(expr.operator, &left, &right)?;
                 Ok(OBoolean(f64::try_from(left)? >= f64::try_from(right)?))
             }
             TT::Less => {
-                Self::check_number_operands(&expr.operator, &left, &right)?;
+                Self::check_number_operands(expr.operator, &left, &right)?;
                 Ok(OBoolean(f64::try_from(left)? < f64::try_from(right)?))
             }
             TT::LessEqual => {
-                Self::check_number_operands(&expr.operator, &left, &right)?;
+                Self::check_number_operands(expr.operator, &left, &right)?;
                 Ok(OBoolean(f64::try_from(left)? <= f64::try_from(right)?))
             }
             TT::Minus => {
-                Self::check_number_operands(&expr.operator, &left, &right)?;
+                Self::check_number_operands(expr.operator, &left, &right)?;
                 Ok(ONumber(f64::try_from(left)? - f64::try_from(right)?))
             }
             TT::Plus => match (left, right) {
@@ -75,11 +75,11 @@ impl Interpreter {
                 .into()),
             },
             TT::Slash => {
-                Self::check_number_operands(&expr.operator, &left, &right)?;
+                Self::check_number_operands(expr.operator, &left, &right)?;
                 Ok(ONumber(f64::try_from(left)? / f64::try_from(right)?))
             }
             TT::Star => {
-                Self::check_number_operands(&expr.operator, &left, &right)?;
+                Self::check_number_operands(expr.operator, &left, &right)?;
                 Ok(ONumber(f64::try_from(left)? * f64::try_from(right)?))
             }
             _ => unreachable!(),
@@ -100,7 +100,7 @@ impl Interpreter {
         match expr.operator.type_ {
             TT::Bang => Ok(OBoolean(!Self::is_truthy(&right))),
             TT::Minus => {
-                Self::check_number_operand(&expr.operator, &right)?;
+                Self::check_number_operand(expr.operator, &right)?;
                 Ok(ONumber(-f64::try_from(right)?))
             }
             _ => unreachable!(),
@@ -146,9 +146,11 @@ mod test {
     use super::*;
     use crate::parser::Parser;
 
+    use std::cell::RefCell;
+
     #[test]
     fn evaluate() -> Result<()> {
-        let mut error_count = 0usize;
+        let error_count = RefCell::new(0usize);
 
         let tokens = vec![
             Token::new(TT::LeftParen, "(", Object::Nil, 1),
@@ -164,13 +166,16 @@ mod test {
             Token::new(TT::Eof, "", Object::Nil, 1),
         ];
 
-        let expr = Parser::new(&tokens, |_, _| {
-            error_count += 1;
-        })
-        .parse()
-        .unwrap()
-        .unwrap();
-        assert_eq!(error_count, 0);
+        let expr = {
+            let expr = Parser::new(&tokens, |_, _| {
+                *error_count.borrow_mut() += 1;
+            })
+            .parse()
+            .unwrap()
+            .unwrap();
+            assert_eq!(*error_count.borrow(), 0);
+            expr
+        };
 
         let mut interpreter = Interpreter::new();
         let res = interpreter.evaluate(&expr)?;

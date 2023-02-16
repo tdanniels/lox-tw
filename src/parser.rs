@@ -3,6 +3,8 @@ use crate::object::Object;
 use crate::token::Token;
 use crate::token_type::TokenType::{self, self as TT};
 
+use std::cell::RefCell;
+
 use anyhow::Result;
 use thiserror::Error;
 
@@ -10,28 +12,28 @@ use thiserror::Error;
 #[error("parse error")]
 struct ParseError;
 
-pub struct Parser<F>
+pub struct Parser<'a, F>
 where
-    F: FnMut(&Token, &str),
+    F: FnMut(&'a Token, &str),
 {
-    tokens: Vec<Token>,
-    current: usize,
-    error_handler: F,
+    tokens: &'a [Token],
+    current: RefCell<usize>,
+    error_handler: RefCell<F>,
 }
 
-impl<F> Parser<F>
+impl<'a, F> Parser<'a, F>
 where
-    F: FnMut(&Token, &str),
+    F: FnMut(&'a Token, &str) + 'a,
 {
-    pub fn new(tokens: &[Token], error_handler: F) -> Self {
+    pub fn new(tokens: &'a [Token], error_handler: F) -> Self {
         Self {
-            tokens: tokens.to_vec(),
-            current: 0,
-            error_handler,
+            tokens,
+            current: 0.into(),
+            error_handler: error_handler.into(),
         }
     }
 
-    pub fn parse(mut self) -> Result<Option<Box<Expr>>> {
+    pub fn parse(self) -> Result<Option<Box<Expr<'a>>>> {
         match self.expression() {
             Ok(expr) => Ok(Some(expr)),
             Err(err) => match err.downcast_ref::<ParseError>() {
@@ -41,15 +43,15 @@ where
         }
     }
 
-    fn expression(&mut self) -> Result<Box<Expr>> {
+    fn expression(&self) -> Result<Box<Expr<'a>>> {
         self.equality()
     }
 
-    fn equality(&mut self) -> Result<Box<Expr>> {
+    fn equality(&self) -> Result<Box<Expr<'a>>> {
         let mut expr = self.comparison()?;
 
         while self.match_(&[TT::BangEqual, TT::EqualEqual]) {
-            let operator = self.previous().clone();
+            let operator = self.previous();
             let right = self.comparison()?;
             expr = expr::Binary::make(expr, operator, right);
         }
@@ -57,11 +59,11 @@ where
         Ok(expr)
     }
 
-    fn comparison(&mut self) -> Result<Box<Expr>> {
+    fn comparison(&self) -> Result<Box<Expr<'a>>> {
         let mut expr = self.term()?;
 
         while self.match_(&[TT::Greater, TT::GreaterEqual, TT::Less, TT::LessEqual]) {
-            let operator = self.previous().clone();
+            let operator = self.previous();
             let right = self.term()?;
             expr = expr::Binary::make(expr, operator, right);
         }
@@ -69,11 +71,11 @@ where
         Ok(expr)
     }
 
-    fn term(&mut self) -> Result<Box<Expr>> {
+    fn term(&self) -> Result<Box<Expr<'a>>> {
         let mut expr = self.factor()?;
 
         while self.match_(&[TT::Minus, TT::Plus]) {
-            let operator = self.previous().clone();
+            let operator = self.previous();
             let right = self.factor()?;
             expr = expr::Binary::make(expr, operator, right);
         }
@@ -81,11 +83,11 @@ where
         Ok(expr)
     }
 
-    fn factor(&mut self) -> Result<Box<Expr>> {
+    fn factor(&self) -> Result<Box<Expr<'a>>> {
         let mut expr = self.unary()?;
 
         while self.match_(&[TT::Slash, TT::Star]) {
-            let operator = self.previous().clone();
+            let operator = self.previous();
             let right = self.unary()?;
             expr = expr::Binary::make(expr, operator, right);
         }
@@ -93,9 +95,9 @@ where
         Ok(expr)
     }
 
-    fn unary(&mut self) -> Result<Box<Expr>> {
+    fn unary(&self) -> Result<Box<Expr<'a>>> {
         if self.match_(&[TT::Bang, TT::Minus]) {
-            let operator = self.previous().clone();
+            let operator = self.previous();
             let right = self.unary()?;
             return Ok(expr::Unary::make(operator, right));
         }
@@ -103,19 +105,19 @@ where
         self.primary()
     }
 
-    fn primary(&mut self) -> Result<Box<Expr>> {
+    fn primary(&self) -> Result<Box<Expr<'a>>> {
         if self.match_(&[TT::False]) {
-            return Ok(expr::Literal::make(Object::Boolean(false)));
+            return Ok(expr::Literal::make(&Object::Boolean(false)));
         }
         if self.match_(&[TT::True]) {
-            return Ok(expr::Literal::make(Object::Boolean(true)));
+            return Ok(expr::Literal::make(&Object::Boolean(true)));
         }
         if self.match_(&[TT::Nil]) {
-            return Ok(expr::Literal::make(Object::Nil));
+            return Ok(expr::Literal::make(&Object::Nil));
         }
 
         if self.match_(&[TT::Number, TT::String]) {
-            return Ok(expr::Literal::make(self.previous().clone().literal));
+            return Ok(expr::Literal::make(&self.previous().literal));
         }
 
         if self.match_(&[TT::LeftParen]) {
@@ -124,11 +126,11 @@ where
             return Ok(expr::Grouping::make(expr));
         }
 
-        let token = self.peek().clone();
-        Err(self.error(&token, "Expect expression.").into())
+        let token = self.peek();
+        Err(self.error(token, "Expect expression.").into())
     }
 
-    fn match_(&mut self, types: &[TokenType]) -> bool {
+    fn match_(&self, types: &[TokenType]) -> bool {
         for type_ in types {
             if self.check(*type_) {
                 self.advance();
@@ -138,13 +140,13 @@ where
         false
     }
 
-    fn consume(&mut self, type_: TokenType, message: &str) -> Result<&Token> {
+    fn consume(&self, type_: TokenType, message: &str) -> Result<&Token> {
         if self.check(type_) {
             return Ok(self.advance());
         }
 
-        let token = self.peek().clone();
-        Err(self.error(&token, message).into())
+        let token = self.peek();
+        Err(self.error(token, message).into())
     }
 
     fn check(&self, type_: TokenType) -> bool {
@@ -154,9 +156,9 @@ where
         self.peek().type_ == type_
     }
 
-    fn advance(&mut self) -> &Token {
+    fn advance(&self) -> &'a Token {
         if !self.is_at_end() {
-            self.current += 1;
+            *self.current.borrow_mut() += 1;
         }
         self.previous()
     }
@@ -165,21 +167,21 @@ where
         self.peek().type_ == TT::Eof
     }
 
-    fn peek(&self) -> &Token {
-        &self.tokens[self.current]
+    fn peek(&self) -> &'a Token {
+        &self.tokens[*self.current.borrow()]
     }
 
-    fn previous(&self) -> &Token {
-        &self.tokens[self.current - 1]
+    fn previous(&self) -> &'a Token {
+        &self.tokens[*self.current.borrow() - 1]
     }
 
-    fn error(&mut self, token: &Token, message: &str) -> ParseError {
-        (self.error_handler)(token, message);
+    fn error(&self, token: &'a Token, message: &str) -> ParseError {
+        (self.error_handler.borrow_mut())(token, message);
         ParseError
     }
 
     #[allow(unused)]
-    fn synchronize(&mut self) {
+    fn synchronize(&self) {
         self.advance();
 
         while !self.is_at_end() {
@@ -209,9 +211,11 @@ mod test {
     use super::*;
     use crate::pretty_printer::AstPrinter;
 
+    use std::cell::RefCell;
+
     #[test]
     fn simple_expr() {
-        let mut error_count = 0usize;
+        let error_count = RefCell::new(0usize);
 
         let tokens = vec![
             Token::new(TT::LeftParen, "(", Object::Nil, 1),
@@ -228,13 +232,13 @@ mod test {
         ];
 
         let expr = Parser::new(&tokens, |_, _| {
-            error_count += 1;
+            *error_count.borrow_mut() += 1;
         })
         .parse()
         .unwrap()
         .unwrap();
 
-        assert_eq!(error_count, 0);
+        assert_eq!(*error_count.borrow(), 0);
         assert_eq!(
             AstPrinter::print(&expr),
             "(* (group (- (+ 1 2) 0.5)) (- 4))"

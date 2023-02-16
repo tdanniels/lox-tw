@@ -5,6 +5,7 @@ use crate::scanner::Scanner;
 use crate::token::Token;
 use crate::token_type::TokenType;
 
+use std::cell::RefCell;
 use std::fs;
 use std::io::{self, Write};
 use std::process;
@@ -34,31 +35,31 @@ impl Lox {
 }
 
 pub struct LoxInternal {
-    had_error: bool,
-    had_runtime_error: bool,
+    had_error: RefCell<bool>,
+    had_runtime_error: RefCell<bool>,
 }
 
 impl LoxInternal {
     fn new() -> Self {
         Self {
-            had_error: false,
-            had_runtime_error: false,
+            had_error: false.into(),
+            had_runtime_error: false.into(),
         }
     }
 
     fn run_file(&mut self, path: &str, interpreter: &mut Interpreter) -> Result<()> {
         let bytes = fs::read(path)?;
         self.run(&String::from_utf8(bytes)?, interpreter);
-        if self.had_error {
+        if *self.had_error.borrow() {
             process::exit(65);
         }
-        if self.had_runtime_error {
+        if *self.had_runtime_error.borrow() {
             process::exit(70);
         }
         Ok(())
     }
 
-    fn run_prompt(&mut self, interpreter: &mut Interpreter) -> Result<()> {
+    fn run_prompt(&self, interpreter: &mut Interpreter) -> Result<()> {
         let mut line = String::new();
         loop {
             print!("> ");
@@ -67,7 +68,7 @@ impl LoxInternal {
                 Ok(0) => break,
                 Ok(_) => {
                     self.run(&line, interpreter);
-                    self.had_error = false
+                    *self.had_error.borrow_mut() = false
                 }
                 Err(error) => eprintln!("IO error: {error}"),
             }
@@ -79,30 +80,30 @@ impl LoxInternal {
         Ok(())
     }
 
-    fn run(&mut self, source: &str, interpreter: &mut Interpreter) {
+    fn run(&self, source: &str, interpreter: &mut Interpreter) {
         let tokens = Scanner::new(source, |l, m| self.line_error(l, m)).scan_tokens();
 
         let expression = Parser::new(&tokens, |t, m| self.token_error(t, m))
             .parse()
             .expect("Unexpected parse error.");
 
-        if self.had_error {
+        if *self.had_error.borrow() {
             return;
         }
 
         interpreter.interpret(&expression.unwrap(), |e| self.runtime_error(e));
     }
 
-    fn line_error(&mut self, line: usize, message: &str) {
+    fn line_error(&self, line: usize, message: &str) {
         self.report(line, "", message);
     }
 
-    fn report(&mut self, line: usize, where_: &str, message: &str) {
+    fn report(&self, line: usize, where_: &str, message: &str) {
         eprintln!("[line {line}] Error{where_}: {message}");
-        self.had_error = true;
+        *self.had_error.borrow_mut() = true;
     }
 
-    fn token_error(&mut self, token: &Token, message: &str) {
+    fn token_error(&self, token: &Token, message: &str) {
         if token.type_ == TokenType::Eof {
             self.report(token.line, " at end", message);
         } else {
@@ -114,8 +115,8 @@ impl LoxInternal {
         }
     }
 
-    fn runtime_error(&mut self, error: &RuntimeError) {
+    fn runtime_error(&self, error: &RuntimeError) {
         eprintln!("{}\n[line {}]", error.message, error.token.line);
-        self.had_runtime_error = true;
+        *self.had_runtime_error.borrow_mut() = true;
     }
 }

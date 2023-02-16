@@ -9,20 +9,20 @@
 ///   a Box<Expr(S)>>.
 #[macro_export]
 macro_rules! ast_struct {
-    ($enum_name: ident, $struct_name: ident, $($field: ident, $type: ty),*) => {
+    ($enum_name: ident, $lifetime: lifetime, $struct_name: ident, $($field: ident, $type: ty),*) => {
         #[derive(Debug)]
-        pub struct $struct_name {
+        pub struct $struct_name<$lifetime> {
             $(
                 pub $field: $type,
             )*
         }
 
-        impl $struct_name {
+        impl<$lifetime> $struct_name<$lifetime> {
             pub fn new($($field: $type,)*) -> Self {
                 Self { $($field,)* }
             }
 
-            pub fn make($($field: $type,)*) -> Box<$enum_name> {
+            pub fn make($($field: $type,)*) -> Box<$enum_name<'a>> {
                 Box::new($enum_name::$struct_name($struct_name::new($($field,)*)))
             }
         }
@@ -31,11 +31,11 @@ macro_rules! ast_struct {
 
 #[macro_export]
 macro_rules! ast_enum {
-    ($enum_name: ident, $($item: ident),*) => {
+    ($enum_name: ident, $lifetime: lifetime, $($item: ident),*) => {
         #[derive(Debug)]
-        pub enum $enum_name {
+        pub enum $enum_name<$lifetime> {
             $(
-                $item($item),
+                $item($item<$lifetime>),
             )*
         }
     };

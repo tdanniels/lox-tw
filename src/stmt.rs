@@ -1,6 +1,6 @@
 use crate::expr::Expr;
 
-crate::ast_struct!(Stmt, Expression, expression, Expr);
-crate::ast_struct!(Stmt, Print, expression, Expr);
+crate::ast_struct!(Stmt, 'a, Expression, expression, Box<Expr<'a>>);
+crate::ast_struct!(Stmt, 'a, Print, expression, Box<Expr<'a>>);
 
-crate::ast_enum!(Stmt, Expression, Print);
+crate::ast_enum!(Stmt, 'a, Expression, Print);
