@@ -3,6 +3,7 @@ use crate::object::Object::{
     self, Boolean as OBoolean, Nil as ONil, Number as ONumber, String as OString,
 };
 use crate::runtime_error::RuntimeError;
+use crate::stmt::{self, Stmt};
 use crate::token::Token;
 use crate::token_type::TokenType as TT;
 
@@ -15,17 +16,29 @@ impl Interpreter {
         Self {}
     }
 
-    pub fn interpret<F>(&mut self, expression: &Expr, mut error_handler: F)
+    pub fn interpret<F>(&mut self, statements: &[Box<Stmt>], mut error_handler: F)
     where
         F: FnMut(&RuntimeError),
     {
-        match self.evaluate(expression) {
-            Ok(value) => println!("{value}"),
-            Err(error) => (error_handler)(
-                error
-                    .downcast_ref::<RuntimeError>()
-                    .expect("Unexpected error"),
-            ),
+        for statement in statements {
+            match self.execute(statement) {
+                Ok(_) => {}
+                Err(error) => {
+                    (error_handler)(
+                        error
+                            .downcast_ref::<RuntimeError>()
+                            .expect("Unexpected error"),
+                    );
+                    return;
+                }
+            }
+        }
+    }
+
+    fn execute(&mut self, stmt: &Stmt) -> Result<()> {
+        match stmt {
+            Stmt::Expression(s) => self.visit_expression_stmt(s),
+            Stmt::Print(s) => self.visit_print_stmt(s),
         }
     }
 
@@ -36,6 +49,17 @@ impl Interpreter {
             Expr::Literal(ex) => Ok(self.visit_literal_expr(ex)),
             Expr::Unary(ex) => self.visit_unary_expr(ex),
         }
+    }
+
+    fn visit_expression_stmt(&mut self, stmt: &stmt::Expression) -> Result<()> {
+        self.evaluate(&stmt.expression)?;
+        Ok(())
+    }
+
+    fn visit_print_stmt(&mut self, stmt: &stmt::Print) -> Result<()> {
+        let value = self.evaluate(&stmt.expression)?;
+        println!("{value}");
+        Ok(())
     }
 
     fn visit_binary_expr(&mut self, expr: &expr::Binary) -> Result<Object> {
@@ -167,24 +191,26 @@ mod test {
             Token::new(TT::Star, "*", Object::Nil, 1),
             Token::new(TT::Minus, "-", Object::Nil, 1),
             Token::new(TT::Number, "4", Object::Number(4.0), 1),
+            Token::new(TT::Semicolon, ";", Object::Nil, 1),
             Token::new(TT::Eof, "", Object::Nil, 1),
         ];
 
-        let expr = {
-            let expr = Parser::new(&tokens, |_, _| {
-                *error_count.borrow_mut() += 1;
-            })
-            .parse()
-            .unwrap()
-            .unwrap();
-            assert_eq!(*error_count.borrow(), 0);
-            expr
-        };
+        let statements = Parser::new(&tokens, |_, _| {
+            *error_count.borrow_mut() += 1;
+        })
+        .parse()
+        .unwrap();
+
+        assert_eq!(*error_count.borrow(), 0);
 
         let mut interpreter = Interpreter::new();
-        let res = interpreter.evaluate(&expr)?;
 
-        assert_eq!(res, Object::Number(-10.0));
+        if let Stmt::Expression(expr_statement) = &*statements[0] {
+            let res = interpreter.evaluate(&expr_statement.expression)?;
+            assert_eq!(res, Object::Number(-10.0));
+        } else {
+            panic!("Expected an expression statement");
+        }
         Ok(())
     }
 }

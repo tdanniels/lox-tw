@@ -63,7 +63,7 @@ impl Lox {
     fn run(&self, source: &str) {
         let tokens = Scanner::new(source, |l, m| self.line_error(l, m)).scan_tokens();
 
-        let expression = Parser::new(&tokens, |t, m| self.token_error(t, m))
+        let statements = Parser::new(&tokens, |t, m| self.token_error(t, m))
             .parse()
             .expect("Unexpected parse error.");
 
@@ -73,7 +73,7 @@ impl Lox {
 
         self.interpreter
             .borrow_mut()
-            .interpret(&expression.unwrap(), |e| self.runtime_error(e));
+            .interpret(&statements, |e| self.runtime_error(e));
     }
 
     fn line_error(&self, line: usize, message: &str) {

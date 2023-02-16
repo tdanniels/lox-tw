@@ -1,5 +1,6 @@
 use crate::expr::{self, Expr};
 use crate::object::Object;
+use crate::stmt::{self, Stmt};
 use crate::token::Token;
 use crate::token_type::TokenType::{self, self as TT};
 
@@ -33,18 +34,35 @@ where
         }
     }
 
-    pub fn parse(self) -> Result<Option<Box<Expr<'a>>>> {
-        match self.expression() {
-            Ok(expr) => Ok(Some(expr)),
-            Err(err) => match err.downcast_ref::<ParseError>() {
-                Some(ParseError) => Ok(None), // Error already handled by error_handler.
-                _ => Err(err),
-            },
+    pub fn parse(self) -> Result<Vec<Box<Stmt<'a>>>> {
+        let mut statements = Vec::new();
+        while !self.is_at_end() {
+            statements.push(self.statement()?);
         }
+        Ok(statements)
     }
 
     fn expression(&self) -> Result<Box<Expr<'a>>> {
         self.equality()
+    }
+
+    fn statement(&self) -> Result<Box<Stmt<'a>>> {
+        if self.match_(&[TT::Print]) {
+            return self.print_statement();
+        }
+        self.expression_statement()
+    }
+
+    fn print_statement(&self) -> Result<Box<Stmt<'a>>> {
+        let value = self.expression()?;
+        self.consume(TT::Semicolon, "Expect ';' after value.")?;
+        Ok(stmt::Print::make(value))
+    }
+
+    fn expression_statement(&self) -> Result<Box<Stmt<'a>>> {
+        let expr = self.expression()?;
+        self.consume(TT::Semicolon, "Expect ';' after expression.")?;
+        Ok(stmt::Expression::make(expr))
     }
 
     fn equality(&self) -> Result<Box<Expr<'a>>> {
@@ -228,20 +246,25 @@ mod test {
             Token::new(TT::Star, "*", Object::Nil, 1),
             Token::new(TT::Minus, "-", Object::Nil, 1),
             Token::new(TT::Number, "4", Object::Number(4.0), 1),
+            Token::new(TT::Semicolon, ";", Object::Nil, 1),
             Token::new(TT::Eof, "", Object::Nil, 1),
         ];
 
-        let expr = Parser::new(&tokens, |_, _| {
+        let statements = Parser::new(&tokens, |_, _| {
             *error_count.borrow_mut() += 1;
         })
         .parse()
-        .unwrap()
         .unwrap();
 
         assert_eq!(*error_count.borrow(), 0);
-        assert_eq!(
-            AstPrinter::print(&expr),
-            "(* (group (- (+ 1 2) 0.5)) (- 4))"
-        );
+
+        if let Stmt::Expression(expr_statement) = &*statements[0] {
+            assert_eq!(
+                AstPrinter::print(&expr_statement.expression),
+                "(* (group (- (+ 1 2) 0.5)) (- 4))"
+            );
+        } else {
+            panic!("Expected an expression statement");
+        }
     }
 }
