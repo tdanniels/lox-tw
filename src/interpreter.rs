@@ -43,27 +43,27 @@ impl Interpreter {
         let right = self.evaluate(&expr.right)?;
 
         match expr.operator.type_ {
-            TT::BangEqual => Ok(OBoolean(!Self::is_equal(&left, &right))),
-            TT::EqualEqual => Ok(OBoolean(Self::is_equal(&left, &right))),
+            TT::BangEqual => Ok(OBoolean(!is_equal(&left, &right))),
+            TT::EqualEqual => Ok(OBoolean(is_equal(&left, &right))),
             TT::Greater => {
-                Self::check_number_operands(expr.operator, &left, &right)?;
-                Ok(OBoolean(f64::try_from(left)? > f64::try_from(right)?))
+                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
+                Ok(OBoolean(l > r))
             }
             TT::GreaterEqual => {
-                Self::check_number_operands(expr.operator, &left, &right)?;
-                Ok(OBoolean(f64::try_from(left)? >= f64::try_from(right)?))
+                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
+                Ok(OBoolean(l >= r))
             }
             TT::Less => {
-                Self::check_number_operands(expr.operator, &left, &right)?;
-                Ok(OBoolean(f64::try_from(left)? < f64::try_from(right)?))
+                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
+                Ok(OBoolean(l < r))
             }
             TT::LessEqual => {
-                Self::check_number_operands(expr.operator, &left, &right)?;
-                Ok(OBoolean(f64::try_from(left)? <= f64::try_from(right)?))
+                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
+                Ok(OBoolean(l <= r))
             }
             TT::Minus => {
-                Self::check_number_operands(expr.operator, &left, &right)?;
-                Ok(ONumber(f64::try_from(left)? - f64::try_from(right)?))
+                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
+                Ok(ONumber(l - r))
             }
             TT::Plus => match (left, right) {
                 (ONumber(l), ONumber(r)) => Ok(ONumber(l + r)),
@@ -75,12 +75,12 @@ impl Interpreter {
                 .into()),
             },
             TT::Slash => {
-                Self::check_number_operands(expr.operator, &left, &right)?;
-                Ok(ONumber(f64::try_from(left)? / f64::try_from(right)?))
+                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
+                Ok(ONumber(l / r))
             }
             TT::Star => {
-                Self::check_number_operands(expr.operator, &left, &right)?;
-                Ok(ONumber(f64::try_from(left)? * f64::try_from(right)?))
+                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
+                Ok(ONumber(l * r))
             }
             _ => unreachable!(),
         }
@@ -98,46 +98,50 @@ impl Interpreter {
         let right = self.evaluate(&expr.right)?;
 
         match expr.operator.type_ {
-            TT::Bang => Ok(OBoolean(!Self::is_truthy(&right))),
+            TT::Bang => Ok(OBoolean(!is_truthy(&right))),
             TT::Minus => {
-                Self::check_number_operand(expr.operator, &right)?;
-                Ok(ONumber(-f64::try_from(right)?))
+                let r = check_number_operand(expr.operator, &right)?;
+                Ok(ONumber(-r))
             }
             _ => unreachable!(),
         }
     }
+}
 
-    fn check_number_operand(operator: &Token, operand: &Object) -> Result<()> {
-        if let ONumber(_) = operand {
-            Ok(())
-        } else {
-            Err(RuntimeError::new(operator.clone(), "Operand must be a number.").into())
-        }
+fn check_number_operand(operator: &Token, operand: &Object) -> Result<f64> {
+    if let ONumber(l) = operand {
+        Ok(*l)
+    } else {
+        Err(RuntimeError::new(operator.clone(), "Operand must be a number.").into())
     }
+}
 
-    fn check_number_operands(operator: &Token, left: &Object, right: &Object) -> Result<()> {
-        if let (ONumber(_), ONumber(_)) = (left, right) {
-            Ok(())
-        } else {
-            Err(RuntimeError::new(operator.clone(), "Operands must be numbers.").into())
-        }
+fn check_number_operands(
+    operator: &Token,
+    left: &Object,
+    right: &Object,
+) -> Result<(f64, f64)> {
+    if let (ONumber(l), ONumber(r)) = (left, right) {
+        Ok((*l, *r))
+    } else {
+        Err(RuntimeError::new(operator.clone(), "Operands must be numbers.").into())
     }
+}
 
-    fn is_truthy(object: &Object) -> bool {
-        match object {
-            ONil => false,
-            OBoolean(b) => *b,
-            _ => true,
-        }
+fn is_truthy(object: &Object) -> bool {
+    match object {
+        ONil => false,
+        OBoolean(b) => *b,
+        _ => true,
     }
+}
 
-    fn is_equal(a: &Object, b: &Object) -> bool {
-        match (a, b) {
-            // Mimic the behaviour of Java's NaN.equals(NaN) even though
-            // it disagrees with IEEE-754.
-            (ONumber(x), ONumber(y)) if x.is_nan() && y.is_nan() => true,
-            _ => a == b,
-        }
+fn is_equal(a: &Object, b: &Object) -> bool {
+    match (a, b) {
+        // Mimic the behaviour of Java's NaN.equals(NaN) even though
+        // it disagrees with IEEE-754.
+        (ONumber(x), ONumber(y)) if x.is_nan() && y.is_nan() => true,
+        _ => a == b,
     }
 }
 
