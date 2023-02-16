@@ -164,14 +164,13 @@ mod test {
             Token::new(TT::Eof, "", Object::Nil, 1),
         ];
 
-        let expr = {
-            let mut parser = Parser::new(&tokens, |_, _| {
-                error_count += 1;
-            });
-            let expr = parser.parse().unwrap().unwrap();
-            assert_eq!(error_count, 0);
-            expr
-        };
+        let expr = Parser::new(&tokens, |_, _| {
+            error_count += 1;
+        })
+        .parse()
+        .unwrap()
+        .unwrap();
+        assert_eq!(error_count, 0);
 
         let mut interpreter = Interpreter::new();
         let res = interpreter.evaluate(&expr)?;

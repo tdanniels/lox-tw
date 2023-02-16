@@ -31,7 +31,7 @@ where
         }
     }
 
-    pub fn parse(&mut self) -> Result<Option<Box<Expr>>> {
+    pub fn parse(mut self) -> Result<Option<Box<Expr>>> {
         match self.expression() {
             Ok(expr) => Ok(Some(expr)),
             Err(err) => match err.downcast_ref::<ParseError>() {
@@ -227,11 +227,12 @@ mod test {
             Token::new(TT::Eof, "", Object::Nil, 1),
         ];
 
-        let mut parser = Parser::new(&tokens, |_, _| {
+        let expr = Parser::new(&tokens, |_, _| {
             error_count += 1;
-        });
-
-        let expr = parser.parse().unwrap().unwrap();
+        })
+        .parse()
+        .unwrap()
+        .unwrap();
 
         assert_eq!(error_count, 0);
         assert_eq!(

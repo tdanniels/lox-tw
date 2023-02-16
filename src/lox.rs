@@ -80,15 +80,11 @@ impl LoxInternal {
     }
 
     fn run(&mut self, source: &str, interpreter: &mut Interpreter) {
-        let tokens = {
-            let mut scanner = Scanner::new(source, |l, m| self.line_error(l, m));
-            scanner.scan_tokens()
-        };
+        let tokens = Scanner::new(source, |l, m| self.line_error(l, m)).scan_tokens();
 
-        let expression = {
-            let mut parser = Parser::new(&tokens, |t, m| self.token_error(t, m));
-            parser.parse().expect("Unexpected parse error.")
-        };
+        let expression = Parser::new(&tokens, |t, m| self.token_error(t, m))
+            .parse()
+            .expect("Unexpected parse error.");
 
         if self.had_error {
             return;

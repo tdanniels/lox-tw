@@ -64,7 +64,7 @@ where
         }
     }
 
-    pub fn scan_tokens(&mut self) -> Vec<Token> {
+    pub fn scan_tokens(mut self) -> Vec<Token> {
         while !self.is_at_end() {
             self.start = self.current;
             self.scan_token();
@@ -72,7 +72,7 @@ where
 
         self.tokens
             .push(Token::new(TT::Eof, "", Object::Nil, self.line));
-        self.tokens.clone()
+        self.tokens
     }
 
     fn scan_token(&mut self) {
@@ -231,12 +231,10 @@ mod test {
         let mut error_count = 0usize;
         let source = r#"var a = 1; var b = "2";
                         print a + 2.5; print b;"#;
-        let tokens = {
-            let mut scanner = Scanner::new(&source, |_, _| {
-                error_count += 1;
-            });
-            scanner.scan_tokens().clone()
-        };
+        let tokens = Scanner::new(source, |_, _| {
+            error_count += 1;
+        })
+        .scan_tokens();
         assert_eq!(error_count, 0);
         assert_eq!(
             tokens,
@@ -268,10 +266,10 @@ mod test {
     fn unclosed_string() {
         let mut error_count = 0usize;
         let source = "var a = \"foo;";
-        let mut scanner = Scanner::new(&source, |_, _| {
+        Scanner::new(source, |_, _| {
             error_count += 1;
-        });
-        let _ = scanner.scan_tokens();
+        })
+        .scan_tokens();
         assert_eq!(error_count, 1);
     }
 
@@ -279,10 +277,10 @@ mod test {
     fn invalid_characters() {
         let mut error_count = 0usize;
         let source = "var a = #\nvar b = @";
-        let mut scanner = Scanner::new(&source, |_, _| {
+        Scanner::new(source, |_, _| {
             error_count += 1;
-        });
-        let _ = scanner.scan_tokens();
+        })
+        .scan_tokens();
         assert_eq!(error_count, 2);
     }
 }
