@@ -22,6 +22,12 @@ macro_rules! ast_struct {
                 Self { $($field,)* }
             }
 
+            #[allow(unused)]
+            pub fn var($($field: $type,)*) -> $enum_name<'a> {
+                $enum_name::$struct_name($struct_name::new($($field,)*))
+            }
+
+            #[allow(unused)]
             pub fn make($($field: $type,)*) -> Box<$enum_name<'a>> {
                 Box::new($enum_name::$struct_name($struct_name::new($($field,)*)))
             }

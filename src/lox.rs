@@ -9,6 +9,7 @@ use std::cell::RefCell;
 use std::fs;
 use std::io::{self, Write};
 use std::process;
+use std::rc::Rc;
 
 use anyhow::Result;
 
@@ -23,7 +24,7 @@ impl Lox {
         Self {
             had_error: false.into(),
             had_runtime_error: false.into(),
-            interpreter: Interpreter::new().into(),
+            interpreter: Interpreter::new(Rc::new(RefCell::new(std::io::stdout()))).into(),
         }
     }
 

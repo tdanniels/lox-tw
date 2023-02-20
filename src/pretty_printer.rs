@@ -29,10 +29,12 @@ impl AstPrinter {
 #[allow(unused)]
 fn visit(expr: &Expr) -> String {
     match expr {
+        Expr::Assign(ex) => parenthesize!(&ex.name.lexeme, &ex.value),
         Expr::Binary(ex) => parenthesize!(&ex.operator.lexeme, &ex.left, &ex.right),
         Expr::Grouping(ex) => parenthesize!("group", &ex.expression),
         Expr::Literal(ex) => ex.value.to_string(),
         Expr::Unary(ex) => parenthesize!(&ex.operator.lexeme, &ex.right),
+        Expr::Variable(ex) => ex.name.lexeme.to_string(),
     }
 }
 

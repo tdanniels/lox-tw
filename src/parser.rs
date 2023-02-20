@@ -34,35 +34,104 @@ where
         }
     }
 
-    pub fn parse(self) -> Result<Vec<Box<Stmt<'a>>>> {
+    pub fn parse(self) -> Result<Vec<Stmt<'a>>> {
         let mut statements = Vec::new();
         while !self.is_at_end() {
-            statements.push(self.statement()?);
+            if let Some(declaration_result) = self.declaration() {
+                statements.push(declaration_result?);
+            }
         }
         Ok(statements)
     }
 
     fn expression(&self) -> Result<Box<Expr<'a>>> {
-        self.equality()
+        self.assignment()
     }
 
-    fn statement(&self) -> Result<Box<Stmt<'a>>> {
+    fn declaration(&self) -> Option<Result<Stmt<'a>>> {
+        let stmt_result = if self.match_(&[TT::Var]) {
+            self.var_declaration()
+        } else {
+            self.statement()
+        };
+        match stmt_result {
+            Err(error) => {
+                return match error.downcast_ref::<ParseError>() {
+                    Some(_) => {
+                        self.synchronize();
+                        None
+                    }
+                    None => Some(Err(error)),
+                }
+            }
+            Ok(res) => Some(Ok(res)),
+        }
+    }
+
+    fn statement(&self) -> Result<Stmt<'a>> {
         if self.match_(&[TT::Print]) {
             return self.print_statement();
+        }
+        if self.match_(&[TT::LeftBrace]) {
+            return Ok(stmt::Block::var(self.block()?));
         }
         self.expression_statement()
     }
 
-    fn print_statement(&self) -> Result<Box<Stmt<'a>>> {
+    fn print_statement(&self) -> Result<Stmt<'a>> {
         let value = self.expression()?;
         self.consume(TT::Semicolon, "Expect ';' after value.")?;
-        Ok(stmt::Print::make(value))
+        Ok(stmt::Print::var(value))
     }
 
-    fn expression_statement(&self) -> Result<Box<Stmt<'a>>> {
+    fn var_declaration(&self) -> Result<Stmt<'a>> {
+        let name = self.consume(TT::Identifier, "Expect variable name.")?;
+
+        let initializer = if self.match_(&[TT::Equal]) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(TT::Semicolon, "Expect ';' after variable declaration.")?;
+        Ok(stmt::Var::var(name, initializer))
+    }
+
+    fn expression_statement(&self) -> Result<Stmt<'a>> {
         let expr = self.expression()?;
         self.consume(TT::Semicolon, "Expect ';' after expression.")?;
-        Ok(stmt::Expression::make(expr))
+        Ok(stmt::Expression::var(expr))
+    }
+
+    fn block(&self) -> Result<Vec<Stmt<'a>>> {
+        let mut statements = Vec::new();
+
+        while !self.check(TT::RightBrace) && !self.is_at_end() {
+            if let Some(declaration) = self.declaration() {
+                statements.push(declaration?);
+            }
+        }
+
+        self.consume(TT::RightBrace, "Expect '}' after block.")?;
+        Ok(statements)
+    }
+
+    fn assignment(&self) -> Result<Box<Expr<'a>>> {
+        let expr = self.equality()?;
+
+        if self.match_(&[TT::Equal]) {
+            let equals = self.previous();
+            let value = self.assignment()?;
+
+            if let Expr::Variable(var) = *expr {
+                let name = var.name;
+                return Ok(expr::Assign::make(name, value));
+            }
+
+            self.error(equals, "Invalid assignment target.");
+        }
+
+        Ok(expr)
     }
 
     fn equality(&self) -> Result<Box<Expr<'a>>> {
@@ -138,6 +207,10 @@ where
             return Ok(expr::Literal::make(&self.previous().literal));
         }
 
+        if self.match_(&[TT::Identifier]) {
+            return Ok(expr::Variable::make(self.previous()));
+        }
+
         if self.match_(&[TT::LeftParen]) {
             let expr = self.expression()?;
             self.consume(TT::RightParen, "Expect ')' after expression.")?;
@@ -158,7 +231,7 @@ where
         false
     }
 
-    fn consume(&self, type_: TokenType, message: &str) -> Result<&Token> {
+    fn consume(&self, type_: TokenType, message: &str) -> Result<&'a Token> {
         if self.check(type_) {
             return Ok(self.advance());
         }
@@ -258,7 +331,7 @@ mod test {
 
         assert_eq!(*error_count.borrow(), 0);
 
-        if let Stmt::Expression(expr_statement) = &*statements[0] {
+        if let Stmt::Expression(expr_statement) = &statements[0] {
             assert_eq!(
                 AstPrinter::print(&expr_statement.expression),
                 "(* (group (- (+ 1 2) 0.5)) (- 4))"

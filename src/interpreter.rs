@@ -1,3 +1,4 @@
+use crate::environment::Environment;
 use crate::expr::{self, Expr};
 use crate::object::Object::{
     self, Boolean as OBoolean, Nil as ONil, Number as ONumber, String as OString,
@@ -7,16 +8,26 @@ use crate::stmt::{self, Stmt};
 use crate::token::Token;
 use crate::token_type::TokenType as TT;
 
+use std::cell::RefCell;
+use std::io;
+use std::rc::Rc;
+
 use anyhow::Result;
 
-pub struct Interpreter {}
+pub struct Interpreter {
+    environment: Rc<RefCell<Environment>>,
+    writer: Rc<RefCell<dyn io::Write>>,
+}
 
 impl Interpreter {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(writer: Rc<RefCell<dyn io::Write>>) -> Self {
+        Self {
+            environment: Rc::new(RefCell::new(Environment::new(None))),
+            writer,
+        }
     }
 
-    pub fn interpret<F>(&mut self, statements: &[Box<Stmt>], mut error_handler: F)
+    pub fn interpret<F>(&mut self, statements: &[Stmt], mut error_handler: F)
     where
         F: FnMut(&RuntimeError),
     {
@@ -37,17 +48,51 @@ impl Interpreter {
 
     fn execute(&mut self, stmt: &Stmt) -> Result<()> {
         match stmt {
+            Stmt::Block(s) => self.visit_block_stmt(s),
             Stmt::Expression(s) => self.visit_expression_stmt(s),
             Stmt::Print(s) => self.visit_print_stmt(s),
+            Stmt::Var(s) => self.visit_var_stmt(s),
         }
     }
 
-    fn evaluate(&mut self, expr: &Expr) -> Result<Object> {
+    fn execute_block(
+        &mut self,
+        statements: &[Stmt],
+        environment: Rc<RefCell<Environment>>,
+    ) -> Result<()> {
+        let previous = Rc::clone(&self.environment);
+        self.environment = environment;
+
+        for statement in statements {
+            let result = self.execute(statement);
+            if result.is_err() {
+                self.environment = previous;
+                return result;
+            }
+        }
+
+        self.environment = previous;
+        Ok(())
+    }
+
+    fn visit_block_stmt(&mut self, stmt: &stmt::Block) -> Result<()> {
+        self.execute_block(
+            &stmt.statements,
+            Rc::new(RefCell::new(Environment::new(Some(Rc::clone(
+                &self.environment,
+            ))))),
+        )?;
+        Ok(())
+    }
+
+    fn evaluate(&mut self, expr: &Expr) -> Result<Rc<Object>> {
         match expr {
+            Expr::Assign(ex) => self.visit_assign_expr(ex),
             Expr::Binary(ex) => self.visit_binary_expr(ex),
             Expr::Grouping(ex) => self.visit_grouping_expr(ex),
-            Expr::Literal(ex) => Ok(self.visit_literal_expr(ex)),
+            Expr::Literal(ex) => Ok(Rc::new(self.visit_literal_expr(ex))),
             Expr::Unary(ex) => self.visit_unary_expr(ex),
+            Expr::Variable(ex) => self.visit_variable_expr(ex),
         }
     }
 
@@ -58,40 +103,61 @@ impl Interpreter {
 
     fn visit_print_stmt(&mut self, stmt: &stmt::Print) -> Result<()> {
         let value = self.evaluate(&stmt.expression)?;
-        println!("{value}");
+        writeln!(self.writer.borrow_mut(), "{value}")?;
         Ok(())
     }
 
-    fn visit_binary_expr(&mut self, expr: &expr::Binary) -> Result<Object> {
+    fn visit_var_stmt(&mut self, stmt: &stmt::Var) -> Result<()> {
+        let value = if let Some(initializer) = &stmt.initializer {
+            self.evaluate(initializer)?
+        } else {
+            Rc::new(Object::Nil)
+        };
+
+        self.environment
+            .borrow_mut()
+            .define(&stmt.name.lexeme, value);
+        Ok(())
+    }
+
+    fn visit_assign_expr(&mut self, expr: &expr::Assign) -> Result<Rc<Object>> {
+        let value = self.evaluate(&expr.value)?;
+        self.environment
+            .borrow_mut()
+            .assign(expr.name, Rc::clone(&value))?;
+        Ok(value)
+    }
+
+    fn visit_binary_expr(&mut self, expr: &expr::Binary) -> Result<Rc<Object>> {
         let left = self.evaluate(&expr.left)?;
         let right = self.evaluate(&expr.right)?;
 
         match expr.operator.type_ {
-            TT::BangEqual => Ok(OBoolean(!is_equal(&left, &right))),
-            TT::EqualEqual => Ok(OBoolean(is_equal(&left, &right))),
+            TT::BangEqual => Ok(Rc::new(OBoolean(!is_equal(&left, &right)))),
+            TT::EqualEqual => Ok(Rc::new(OBoolean(is_equal(&left, &right)))),
             TT::Greater => {
                 let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(OBoolean(l > r))
+                Ok(Rc::new(OBoolean(l > r)))
             }
             TT::GreaterEqual => {
                 let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(OBoolean(l >= r))
+                Ok(Rc::new(OBoolean(l >= r)))
             }
             TT::Less => {
                 let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(OBoolean(l < r))
+                Ok(Rc::new(OBoolean(l < r)))
             }
             TT::LessEqual => {
                 let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(OBoolean(l <= r))
+                Ok(Rc::new(OBoolean(l <= r)))
             }
             TT::Minus => {
                 let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(ONumber(l - r))
+                Ok(Rc::new(ONumber(l - r)))
             }
-            TT::Plus => match (left, right) {
-                (ONumber(l), ONumber(r)) => Ok(ONumber(l + r)),
-                (OString(l), OString(r)) => Ok(OString(l + r.as_str())),
+            TT::Plus => match (left.as_ref(), right.as_ref()) {
+                (ONumber(l), ONumber(r)) => Ok(Rc::new(ONumber(l + r))),
+                (OString(l), OString(r)) => Ok(Rc::new(OString(l.to_owned() + r.as_str()))),
                 _ => Err(RuntimeError::new(
                     expr.operator.clone(),
                     "Operands must be two numbers or two strings.",
@@ -100,17 +166,17 @@ impl Interpreter {
             },
             TT::Slash => {
                 let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(ONumber(l / r))
+                Ok(Rc::new(ONumber(l / r)))
             }
             TT::Star => {
                 let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(ONumber(l * r))
+                Ok(Rc::new(ONumber(l * r)))
             }
             _ => unreachable!(),
         }
     }
 
-    fn visit_grouping_expr(&mut self, expr: &expr::Grouping) -> Result<Object> {
+    fn visit_grouping_expr(&mut self, expr: &expr::Grouping) -> Result<Rc<Object>> {
         self.evaluate(&expr.expression)
     }
 
@@ -118,17 +184,21 @@ impl Interpreter {
         expr.value.clone()
     }
 
-    fn visit_unary_expr(&mut self, expr: &expr::Unary) -> Result<Object> {
+    fn visit_unary_expr(&mut self, expr: &expr::Unary) -> Result<Rc<Object>> {
         let right = self.evaluate(&expr.right)?;
 
         match expr.operator.type_ {
-            TT::Bang => Ok(OBoolean(!is_truthy(&right))),
+            TT::Bang => Ok(Rc::new(OBoolean(!is_truthy(&right)))),
             TT::Minus => {
                 let r = check_number_operand(expr.operator, &right)?;
-                Ok(ONumber(-r))
+                Ok(Rc::new(ONumber(-r)))
             }
             _ => unreachable!(),
         }
+    }
+
+    fn visit_variable_expr(&mut self, expr: &expr::Variable) -> Result<Rc<Object>> {
+        self.environment.borrow().get(expr.name)
     }
 }
 
@@ -173,6 +243,7 @@ fn is_equal(a: &Object, b: &Object) -> bool {
 mod test {
     use super::*;
     use crate::parser::Parser;
+    use crate::scanner::Scanner;
 
     use std::cell::RefCell;
 
@@ -203,14 +274,56 @@ mod test {
 
         assert_eq!(*error_count.borrow(), 0);
 
-        let mut interpreter = Interpreter::new();
+        let mut interpreter = Interpreter::new(Rc::new(RefCell::new(std::io::stdout())));
 
-        if let Stmt::Expression(expr_statement) = &*statements[0] {
+        if let Stmt::Expression(expr_statement) = &statements[0] {
             let res = interpreter.evaluate(&expr_statement.expression)?;
-            assert_eq!(res, Object::Number(-10.0));
+            assert_eq!(*res, Object::Number(-10.0));
         } else {
             panic!("Expected an expression statement");
         }
+        Ok(())
+    }
+
+    #[test]
+    fn lexical_scope() -> Result<()> {
+        let error_count = RefCell::new(0usize);
+
+        let source = r"
+            var a = 3; print a;
+            {
+                var a = 5; print a;
+                {
+                    var a = 7; print a;
+                }
+                print a;
+            }
+            print a;
+            {
+                a = 1; print a;
+            }
+            print a;
+        ";
+        let expected_output = b"3\n5\n7\n5\n3\n1\n1\n";
+
+        let tokens =
+            Scanner::new(source, |_, _| *error_count.borrow_mut() += 1).scan_tokens();
+
+        let statements = Parser::new(&tokens, |_, _| {
+            *error_count.borrow_mut() += 1;
+        })
+        .parse()
+        .unwrap();
+
+        assert_eq!(*error_count.borrow(), 0);
+
+        let output = Rc::new(RefCell::new(Vec::new()));
+        let mut interpreter = Interpreter::new(output.clone());
+        interpreter.interpret(&statements, |_| *error_count.borrow_mut() += 1);
+
+        assert_eq!(*error_count.borrow(), 0);
+        assert_eq!(*output.borrow(), expected_output);
+
         Ok(())
     }
 }

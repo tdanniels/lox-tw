@@ -1,6 +1,7 @@
 use crate::object::Object;
 use crate::token::Token;
 
+crate::ast_struct!(Expr, 'a, Assign, name, &'a Token, value, Box<Expr<'a>>);
 crate::ast_struct!(
     Expr,
     'a,
@@ -15,5 +16,6 @@ crate::ast_struct!(
 crate::ast_struct!(Expr, 'a, Grouping, expression, Box<Expr<'a>>);
 crate::ast_struct!(Expr, 'a, Literal, value, &'a Object);
 crate::ast_struct!(Expr, 'a, Unary, operator, &'a Token, right, Box<Expr<'a>>);
+crate::ast_struct!(Expr, 'a, Variable, name, &'a Token);
 
-crate::ast_enum!(Expr, 'a, Binary, Grouping, Literal, Unary);
+crate::ast_enum!(Expr, 'a, Assign, Binary, Grouping, Literal, Unary, Variable);
