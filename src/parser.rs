@@ -69,6 +69,9 @@ where
     }
 
     fn statement(&self) -> Result<Stmt<'a>> {
+        if self.match_(&[TT::If]) {
+            return self.if_statement();
+        }
         if self.match_(&[TT::Print]) {
             return self.print_statement();
         }
@@ -76,6 +79,21 @@ where
             return Ok(stmt::Block::var(self.block()?));
         }
         self.expression_statement()
+    }
+
+    fn if_statement(&self) -> Result<Stmt<'a>> {
+        self.consume(TT::LeftParen, "Expect '(' after 'if'.")?;
+        let condition = self.expression()?;
+        self.consume(TT::RightParen, "Expect ')' after if condition.")?;
+
+        let then_branch = Box::new(self.statement()?);
+        let else_branch = if self.match_(&[TT::Else]) {
+            Some(Box::new(self.statement()?))
+        } else {
+            None
+        };
+
+        Ok(stmt::If::var(condition, then_branch, else_branch))
     }
 
     fn print_statement(&self) -> Result<Stmt<'a>> {

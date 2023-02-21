@@ -50,6 +50,7 @@ impl Interpreter {
         match stmt {
             Stmt::Block(s) => self.visit_block_stmt(s),
             Stmt::Expression(s) => self.visit_expression_stmt(s),
+            Stmt::If(s) => self.visit_if_stmt(s),
             Stmt::Print(s) => self.visit_print_stmt(s),
             Stmt::Var(s) => self.visit_var_stmt(s),
         }
@@ -98,6 +99,15 @@ impl Interpreter {
 
     fn visit_expression_stmt(&mut self, stmt: &stmt::Expression) -> Result<()> {
         self.evaluate(&stmt.expression)?;
+        Ok(())
+    }
+
+    fn visit_if_stmt(&mut self, stmt: &stmt::If) -> Result<()> {
+        if is_truthy(&*self.evaluate(&stmt.condition)?) {
+            self.execute(&stmt.then_branch)?;
+        } else if let Some(else_branch) = &stmt.else_branch {
+            self.execute(&else_branch)?;
+        }
         Ok(())
     }
 
@@ -305,6 +315,37 @@ mod test {
             print a;
         ";
         let expected_output = b"3\n5\n7\n5\n3\n1\n1\n";
+
+        let tokens =
+            Scanner::new(source, |_, _| *error_count.borrow_mut() += 1).scan_tokens();
+
+        let statements = Parser::new(&tokens, |_, _| {
+            *error_count.borrow_mut() += 1;
+        })
+        .parse()
+        .unwrap();
+
+        assert_eq!(*error_count.borrow(), 0);
+
+        let output = Rc::new(RefCell::new(Vec::new()));
+        let mut interpreter = Interpreter::new(output.clone());
+        interpreter.interpret(&statements, |_| *error_count.borrow_mut() += 1);
+
+        assert_eq!(*error_count.borrow(), 0);
+        assert_eq!(*output.borrow(), expected_output);
+
+        Ok(())
+    }
+
+    #[test]
+    fn if_else() -> Result<()> {
+        let error_count = RefCell::new(0usize);
+
+        let source = r#"
+            if (true) print "foo"; else print "bar";
+            if (false) print "foo"; else print "bar";
+        "#;
+        let expected_output = b"foo\nbar\n";
 
         let tokens =
             Scanner::new(source, |_, _| *error_count.borrow_mut() += 1).scan_tokens();
