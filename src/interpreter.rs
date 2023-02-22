@@ -277,6 +277,38 @@ mod test {
     use crate::scanner::Scanner;
 
     use std::cell::RefCell;
+    use std::str;
+
+    fn positive_interpreter_test(source: &str, expected_output: &str) -> Result<()> {
+        let error_count = RefCell::new(0usize);
+
+        let tokens =
+            Scanner::new(source, |_, _| *error_count.borrow_mut() += 1).scan_tokens();
+
+        let statements = Parser::new(&tokens, |_, _| {
+            *error_count.borrow_mut() += 1;
+        })
+        .parse()
+        .unwrap();
+
+        assert_eq!(*error_count.borrow(), 0);
+
+        let output = Rc::new(RefCell::new(Vec::new()));
+        let mut interpreter = Interpreter::new(output.clone());
+        interpreter.interpret(&statements, |_| *error_count.borrow_mut() += 1);
+
+        assert_eq!(*error_count.borrow(), 0);
+
+        // First compare the stringified output/expected output in order to
+        // get an error message in terms of strings if they don't match.
+        assert_eq!(str::from_utf8(&output.borrow())?, expected_output);
+
+        // This should always pass if the above assertion passed, but let's
+        // be thorough.
+        assert_eq!(*output.borrow(), expected_output.as_bytes());
+
+        Ok(())
+    }
 
     #[test]
     fn evaluate() -> Result<()> {
@@ -318,8 +350,6 @@ mod test {
 
     #[test]
     fn lexical_scope() -> Result<()> {
-        let error_count = RefCell::new(0usize);
-
         let source = r"
             var a = 3; print a;
             {
@@ -335,57 +365,17 @@ mod test {
             }
             print a;
         ";
-        let expected_output = b"3\n5\n7\n5\n3\n1\n1\n";
-
-        let tokens =
-            Scanner::new(source, |_, _| *error_count.borrow_mut() += 1).scan_tokens();
-
-        let statements = Parser::new(&tokens, |_, _| {
-            *error_count.borrow_mut() += 1;
-        })
-        .parse()
-        .unwrap();
-
-        assert_eq!(*error_count.borrow(), 0);
-
-        let output = Rc::new(RefCell::new(Vec::new()));
-        let mut interpreter = Interpreter::new(output.clone());
-        interpreter.interpret(&statements, |_| *error_count.borrow_mut() += 1);
-
-        assert_eq!(*error_count.borrow(), 0);
-        assert_eq!(*output.borrow(), expected_output);
-
-        Ok(())
+        let expected_output = "3\n5\n7\n5\n3\n1\n1\n";
+        positive_interpreter_test(source, expected_output)
     }
 
     #[test]
     fn if_else() -> Result<()> {
-        let error_count = RefCell::new(0usize);
-
         let source = r#"
             if (true) print "foo"; else print "bar";
             if (false) print "foo"; else print "bar";
         "#;
-        let expected_output = b"foo\nbar\n";
-
-        let tokens =
-            Scanner::new(source, |_, _| *error_count.borrow_mut() += 1).scan_tokens();
-
-        let statements = Parser::new(&tokens, |_, _| {
-            *error_count.borrow_mut() += 1;
-        })
-        .parse()
-        .unwrap();
-
-        assert_eq!(*error_count.borrow(), 0);
-
-        let output = Rc::new(RefCell::new(Vec::new()));
-        let mut interpreter = Interpreter::new(output.clone());
-        interpreter.interpret(&statements, |_| *error_count.borrow_mut() += 1);
-
-        assert_eq!(*error_count.borrow(), 0);
-        assert_eq!(*output.borrow(), expected_output);
-
-        Ok(())
+        let expected_output = "foo\nbar\n";
+        positive_interpreter_test(source, expected_output)
     }
 }
