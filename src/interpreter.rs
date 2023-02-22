@@ -53,6 +53,7 @@ impl Interpreter {
             Stmt::If(s) => self.visit_if_stmt(s),
             Stmt::Print(s) => self.visit_print_stmt(s),
             Stmt::Var(s) => self.visit_var_stmt(s),
+            Stmt::While(s) => self.visit_while_statement(s),
         }
     }
 
@@ -128,6 +129,13 @@ impl Interpreter {
         self.environment
             .borrow_mut()
             .define(&stmt.name.lexeme, value);
+        Ok(())
+    }
+
+    fn visit_while_statement(&mut self, stmt: &stmt::While) -> Result<()> {
+        while is_truthy(&*self.evaluate(&stmt.condition)?) {
+            self.execute(&stmt.body)?;
+        }
         Ok(())
     }
 
@@ -388,6 +396,20 @@ mod test {
             var d = true and "d"; print d;
         "#;
         let expected_output = "a\nb\nfalse\nd\n";
+        positive_interpreter_test(source, expected_output)
+    }
+
+    #[test]
+    fn while_for() -> Result<()> {
+        let source = r"
+            var i = 0;
+            while (i < 5) { print i; i = i + 1; }
+
+            var a = 0;
+            var temp;
+            for (var b = 1; a < 60; b = temp + b) { print a; temp = a; a = b; }
+        ";
+        let expected_output = "0\n1\n2\n3\n4\n0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n55\n";
         positive_interpreter_test(source, expected_output)
     }
 }

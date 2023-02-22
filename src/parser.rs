@@ -69,16 +69,66 @@ where
     }
 
     fn statement(&self) -> Result<Stmt<'a>> {
+        if self.match_(&[TT::For]) {
+            return self.for_statement();
+        }
         if self.match_(&[TT::If]) {
             return self.if_statement();
         }
         if self.match_(&[TT::Print]) {
             return self.print_statement();
         }
+        if self.match_(&[TT::While]) {
+            return self.while_statement();
+        }
         if self.match_(&[TT::LeftBrace]) {
             return Ok(stmt::Block::var(self.block()?));
         }
         self.expression_statement()
+    }
+
+    fn for_statement(&self) -> Result<Stmt<'a>> {
+        self.consume(TT::LeftParen, "Expect '(' after 'for'.")?;
+
+        let initializer = if self.match_(&[TT::Semicolon]) {
+            None
+        } else if self.match_(&[TT::Var]) {
+            Some(self.var_declaration()?)
+        } else {
+            Some(self.expression_statement()?)
+        };
+
+        let mut condition = if self.check(TT::Semicolon) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+        self.consume(TT::Semicolon, "Expect ';' after loop condition.")?;
+
+        let increment = if self.check(TT::RightParen) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+        self.consume(TT::RightParen, "Expect ')' after for clauses.")?;
+
+        let mut body = Box::new(self.statement()?);
+
+        if let Some(incr) = increment {
+            *body = stmt::Block::var(vec![*body, stmt::Expression::var(incr)]);
+        }
+
+        if condition.is_none() {
+            condition = Some(expr::Literal::make(&Object::Boolean(true)));
+        }
+
+        body = stmt::While::make(condition.unwrap(), body);
+
+        if let Some(init) = initializer {
+            *body = stmt::Block::var(vec![init, *body]);
+        }
+
+        Ok(*body)
     }
 
     fn if_statement(&self) -> Result<Stmt<'a>> {
@@ -113,6 +163,15 @@ where
 
         self.consume(TT::Semicolon, "Expect ';' after variable declaration.")?;
         Ok(stmt::Var::var(name, initializer))
+    }
+
+    fn while_statement(&self) -> Result<Stmt<'a>> {
+        self.consume(TT::LeftParen, "Expect '(' after 'while'.")?;
+        let condition = self.expression()?;
+        self.consume(TT::RightParen, "Expect ')' after condition.")?;
+        let body = self.statement()?;
+
+        Ok(stmt::While::var(condition, Box::new(body)))
     }
 
     fn expression_statement(&self) -> Result<Stmt<'a>> {

@@ -16,5 +16,6 @@ crate::ast_struct!(
 );
 crate::ast_struct!(Stmt, 'a, Print, expression, Box<Expr<'a>>);
 crate::ast_struct!(Stmt, 'a, Var, name, &'a Token, initializer, Option<Box<Expr<'a>>>);
+crate::ast_struct!(Stmt, 'a, While, condition, Box<Expr<'a>>, body, Box<Stmt<'a>>);
 
-crate::ast_enum!(Stmt, 'a, Block, Expression, If, Print, Var);
+crate::ast_enum!(Stmt, 'a, Block, Expression, If, Print, Var, While);
