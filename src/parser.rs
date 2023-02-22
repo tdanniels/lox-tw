@@ -135,7 +135,7 @@ where
     }
 
     fn assignment(&self) -> Result<Box<Expr<'a>>> {
-        let expr = self.equality()?;
+        let expr = self.or()?;
 
         if self.match_(&[TT::Equal]) {
             let equals = self.previous();
@@ -147,6 +147,30 @@ where
             }
 
             self.error(equals, "Invalid assignment target.");
+        }
+
+        Ok(expr)
+    }
+
+    fn or(&self) -> Result<Box<Expr<'a>>> {
+        let mut expr = self.and()?;
+
+        while self.match_(&[TT::Or]) {
+            let operator = self.previous();
+            let right = self.and()?;
+            expr = expr::Logical::make(expr, operator, right);
+        }
+
+        Ok(expr)
+    }
+
+    fn and(&self) -> Result<Box<Expr<'a>>> {
+        let mut expr = self.equality()?;
+
+        while self.match_(&[TT::And]) {
+            let operator = self.previous();
+            let right = self.equality()?;
+            expr = expr::Logical::make(expr, operator, right);
         }
 
         Ok(expr)

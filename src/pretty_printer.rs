@@ -33,6 +33,7 @@ fn visit(expr: &Expr) -> String {
         Expr::Binary(ex) => parenthesize!(&ex.operator.lexeme, &ex.left, &ex.right),
         Expr::Grouping(ex) => parenthesize!("group", &ex.expression),
         Expr::Literal(ex) => ex.value.to_string(),
+        Expr::Logical(ex) => parenthesize!(&ex.operator.lexeme, &ex.left, &ex.right),
         Expr::Unary(ex) => parenthesize!(&ex.operator.lexeme, &ex.right),
         Expr::Variable(ex) => ex.name.lexeme.to_string(),
     }

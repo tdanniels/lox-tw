@@ -92,6 +92,7 @@ impl Interpreter {
             Expr::Binary(ex) => self.visit_binary_expr(ex),
             Expr::Grouping(ex) => self.visit_grouping_expr(ex),
             Expr::Literal(ex) => Ok(Rc::new(self.visit_literal_expr(ex))),
+            Expr::Logical(ex) => self.visit_logical_expr(ex),
             Expr::Unary(ex) => self.visit_unary_expr(ex),
             Expr::Variable(ex) => self.visit_variable_expr(ex),
         }
@@ -192,6 +193,26 @@ impl Interpreter {
 
     fn visit_literal_expr(&mut self, expr: &expr::Literal) -> Object {
         expr.value.clone()
+    }
+
+    fn visit_logical_expr(&mut self, expr: &expr::Logical) -> Result<Rc<Object>> {
+        let left = self.evaluate(&expr.left)?;
+
+        match expr.operator.type_ {
+            TT::Or => {
+                if is_truthy(&left) {
+                    return Ok(left);
+                }
+            }
+            TT::And => {
+                if !is_truthy(&left) {
+                    return Ok(left);
+                }
+            }
+            _ => unreachable!(),
+        }
+
+        self.evaluate(&expr.right)
     }
 
     fn visit_unary_expr(&mut self, expr: &expr::Unary) -> Result<Rc<Object>> {
