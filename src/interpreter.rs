@@ -107,7 +107,7 @@ impl Interpreter {
         if is_truthy(&*self.evaluate(&stmt.condition)?) {
             self.execute(&stmt.then_branch)?;
         } else if let Some(else_branch) = &stmt.else_branch {
-            self.execute(&else_branch)?;
+            self.execute(else_branch)?;
         }
         Ok(())
     }
