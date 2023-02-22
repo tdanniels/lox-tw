@@ -378,4 +378,16 @@ mod test {
         let expected_output = "foo\nbar\n";
         positive_interpreter_test(source, expected_output)
     }
+
+    #[test]
+    fn and_or() -> Result<()> {
+        let source = r#"
+            var a = "a" or "x"; print a;
+            var b = nil or "b"; print b;
+            var c = false and 3; print c;
+            var d = true and "d"; print d;
+        "#;
+        let expected_output = "a\nb\nfalse\nd\n";
+        positive_interpreter_test(source, expected_output)
+    }
 }
