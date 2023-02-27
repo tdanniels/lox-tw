@@ -1,28 +1,42 @@
 use crate::environment::Environment;
 use crate::expr::{self, Expr};
+use crate::lox_callable::LoxCallable;
+use crate::lox_function::LoxFunction;
+use crate::lox_result::Result;
 use crate::object::Object::{
-    self, Boolean as OBoolean, Nil as ONil, Number as ONumber, String as OString,
+    self, Boolean as OBoolean, Callable as OCallable, Nil as ONil, Number as ONumber,
+    String as OString,
 };
 use crate::runtime_error::RuntimeError;
 use crate::stmt::{self, Stmt};
 use crate::token::Token;
 use crate::token_type::TokenType as TT;
+use crate::unique_id::unique_id;
 
 use std::cell::RefCell;
+use std::fmt;
 use std::io;
 use std::rc::Rc;
-
-use anyhow::Result;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct Interpreter {
+    pub globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
     writer: Rc<RefCell<dyn io::Write>>,
 }
 
 impl Interpreter {
     pub fn new(writer: Rc<RefCell<dyn io::Write>>) -> Self {
+        let globals = Rc::new(RefCell::new(Environment::new(None)));
+
+        globals.borrow_mut().define(
+            "clock",
+            Rc::new(OCallable(Rc::new(Clock { id: unique_id() }))),
+        );
+
         Self {
-            environment: Rc::new(RefCell::new(Environment::new(None))),
+            globals: Rc::clone(&globals),
+            environment: Rc::clone(&globals),
             writer,
         }
     }
@@ -32,7 +46,7 @@ impl Interpreter {
         F: FnMut(&RuntimeError),
     {
         for statement in statements {
-            match self.execute(statement) {
+            match self.execute(statement.clone()) {
                 Ok(_) => {}
                 Err(error) => {
                     (error_handler)(
@@ -46,10 +60,11 @@ impl Interpreter {
         }
     }
 
-    fn execute(&mut self, stmt: &Stmt) -> Result<()> {
+    fn execute(&mut self, stmt: Stmt) -> Result<()> {
         match stmt {
             Stmt::Block(s) => self.visit_block_stmt(s),
             Stmt::Expression(s) => self.visit_expression_stmt(s),
+            Stmt::Function(s) => self.visit_function_stmt(s),
             Stmt::If(s) => self.visit_if_stmt(s),
             Stmt::Print(s) => self.visit_print_stmt(s),
             Stmt::Var(s) => self.visit_var_stmt(s),
@@ -57,7 +72,7 @@ impl Interpreter {
         }
     }
 
-    fn execute_block(
+    pub fn execute_block(
         &mut self,
         statements: &[Stmt],
         environment: Rc<RefCell<Environment>>,
@@ -66,7 +81,7 @@ impl Interpreter {
         self.environment = environment;
 
         for statement in statements {
-            let result = self.execute(statement);
+            let result = self.execute(statement.clone());
             if result.is_err() {
                 self.environment = previous;
                 return result;
@@ -77,7 +92,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_block_stmt(&mut self, stmt: &stmt::Block) -> Result<()> {
+    fn visit_block_stmt(&mut self, stmt: Rc<stmt::Block>) -> Result<()> {
         self.execute_block(
             &stmt.statements,
             Rc::new(RefCell::new(Environment::new(Some(Rc::clone(
@@ -87,40 +102,49 @@ impl Interpreter {
         Ok(())
     }
 
-    fn evaluate(&mut self, expr: &Expr) -> Result<Rc<Object>> {
+    fn evaluate(&mut self, expr: Expr) -> Result<Rc<Object>> {
         match expr {
             Expr::Assign(ex) => self.visit_assign_expr(ex),
             Expr::Binary(ex) => self.visit_binary_expr(ex),
+            Expr::Call(ex) => self.visit_call_expr(ex),
             Expr::Grouping(ex) => self.visit_grouping_expr(ex),
-            Expr::Literal(ex) => Ok(Rc::new(self.visit_literal_expr(ex))),
+            Expr::Literal(ex) => self.visit_literal_expr(ex),
             Expr::Logical(ex) => self.visit_logical_expr(ex),
             Expr::Unary(ex) => self.visit_unary_expr(ex),
             Expr::Variable(ex) => self.visit_variable_expr(ex),
         }
     }
 
-    fn visit_expression_stmt(&mut self, stmt: &stmt::Expression) -> Result<()> {
-        self.evaluate(&stmt.expression)?;
+    fn visit_expression_stmt(&mut self, stmt: Rc<stmt::Expression>) -> Result<()> {
+        self.evaluate(stmt.expression.clone())?;
         Ok(())
     }
 
-    fn visit_if_stmt(&mut self, stmt: &stmt::If) -> Result<()> {
-        if is_truthy(&*self.evaluate(&stmt.condition)?) {
-            self.execute(&stmt.then_branch)?;
-        } else if let Some(else_branch) = &stmt.else_branch {
+    fn visit_function_stmt(&mut self, stmt: Rc<stmt::Function>) -> Result<()> {
+        let function = Rc::new(LoxFunction::new(stmt.clone()));
+        self.environment
+            .borrow_mut()
+            .define(&stmt.name.lexeme, Rc::new(OCallable(function)));
+        Ok(())
+    }
+
+    fn visit_if_stmt(&mut self, stmt: Rc<stmt::If>) -> Result<()> {
+        if is_truthy(&*self.evaluate(stmt.condition.clone())?) {
+            self.execute(stmt.then_branch.clone())?;
+        } else if let Some(else_branch) = stmt.else_branch.clone() {
             self.execute(else_branch)?;
         }
         Ok(())
     }
 
-    fn visit_print_stmt(&mut self, stmt: &stmt::Print) -> Result<()> {
-        let value = self.evaluate(&stmt.expression)?;
+    fn visit_print_stmt(&mut self, stmt: Rc<stmt::Print>) -> Result<()> {
+        let value = self.evaluate(stmt.expression.clone())?;
         writeln!(self.writer.borrow_mut(), "{value}")?;
         Ok(())
     }
 
-    fn visit_var_stmt(&mut self, stmt: &stmt::Var) -> Result<()> {
-        let value = if let Some(initializer) = &stmt.initializer {
+    fn visit_var_stmt(&mut self, stmt: Rc<stmt::Var>) -> Result<()> {
+        let value = if let Some(initializer) = stmt.initializer.clone() {
             self.evaluate(initializer)?
         } else {
             Rc::new(Object::Nil)
@@ -132,79 +156,116 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_while_statement(&mut self, stmt: &stmt::While) -> Result<()> {
-        while is_truthy(&*self.evaluate(&stmt.condition)?) {
-            self.execute(&stmt.body)?;
+    fn visit_while_statement(&mut self, stmt: Rc<stmt::While>) -> Result<()> {
+        while is_truthy(&*self.evaluate(stmt.condition.clone())?) {
+            self.execute(stmt.body.clone())?;
         }
         Ok(())
     }
 
-    fn visit_assign_expr(&mut self, expr: &expr::Assign) -> Result<Rc<Object>> {
-        let value = self.evaluate(&expr.value)?;
+    fn visit_assign_expr(&mut self, expr: Rc<expr::Assign>) -> Result<Rc<Object>> {
+        let value = self.evaluate(expr.value.clone())?;
         self.environment
             .borrow_mut()
-            .assign(expr.name, Rc::clone(&value))?;
+            .assign(&expr.name, Rc::clone(&value))?;
         Ok(value)
     }
 
-    fn visit_binary_expr(&mut self, expr: &expr::Binary) -> Result<Rc<Object>> {
-        let left = self.evaluate(&expr.left)?;
-        let right = self.evaluate(&expr.right)?;
+    fn visit_binary_expr(&mut self, expr: Rc<expr::Binary>) -> Result<Rc<Object>> {
+        let left = self.evaluate(expr.left.clone())?;
+        let right = self.evaluate(expr.right.clone())?;
 
-        match expr.operator.type_ {
-            TT::BangEqual => Ok(Rc::new(OBoolean(!is_equal(&left, &right)))),
-            TT::EqualEqual => Ok(Rc::new(OBoolean(is_equal(&left, &right)))),
+        let obj = match expr.operator.type_ {
+            TT::BangEqual => OBoolean(!is_equal(&left, &right)),
+            TT::EqualEqual => OBoolean(is_equal(&left, &right)),
             TT::Greater => {
-                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(Rc::new(OBoolean(l > r)))
+                let (l, r) = check_number_operands(&expr.operator, &left, &right)?;
+                OBoolean(l > r)
             }
             TT::GreaterEqual => {
-                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(Rc::new(OBoolean(l >= r)))
+                let (l, r) = check_number_operands(&expr.operator, &left, &right)?;
+                OBoolean(l >= r)
             }
             TT::Less => {
-                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(Rc::new(OBoolean(l < r)))
+                let (l, r) = check_number_operands(&expr.operator, &left, &right)?;
+                OBoolean(l < r)
             }
             TT::LessEqual => {
-                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(Rc::new(OBoolean(l <= r)))
+                let (l, r) = check_number_operands(&expr.operator, &left, &right)?;
+                OBoolean(l <= r)
             }
             TT::Minus => {
-                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(Rc::new(ONumber(l - r)))
+                let (l, r) = check_number_operands(&expr.operator, &left, &right)?;
+                ONumber(l - r)
             }
             TT::Plus => match (left.as_ref(), right.as_ref()) {
-                (ONumber(l), ONumber(r)) => Ok(Rc::new(ONumber(l + r))),
-                (OString(l), OString(r)) => Ok(Rc::new(OString(l.to_owned() + r.as_str()))),
-                _ => Err(RuntimeError::new(
-                    expr.operator.clone(),
-                    "Operands must be two numbers or two strings.",
-                )
-                .into()),
+                (ONumber(l), ONumber(r)) => ONumber(l + r),
+                (OString(l), OString(r)) => OString(l.to_owned() + r.as_str()),
+                _ => {
+                    return Err(RuntimeError::new(
+                        expr.operator.clone(),
+                        "Operands must be two numbers or two strings.",
+                    )
+                    .into())
+                }
             },
             TT::Slash => {
-                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(Rc::new(ONumber(l / r)))
+                let (l, r) = check_number_operands(&expr.operator, &left, &right)?;
+                ONumber(l / r)
             }
             TT::Star => {
-                let (l, r) = check_number_operands(expr.operator, &left, &right)?;
-                Ok(Rc::new(ONumber(l * r)))
+                let (l, r) = check_number_operands(&expr.operator, &left, &right)?;
+                ONumber(l * r)
             }
             _ => unreachable!(),
+        };
+        Ok(Rc::new(obj))
+    }
+
+    fn visit_call_expr(&mut self, expr: Rc<expr::Call>) -> Result<Rc<Object>> {
+        let callee = self.evaluate(expr.callee.clone())?;
+
+        let arguments = {
+            let mut arguments = Vec::new();
+            for argument in expr.arguments.clone() {
+                arguments.push(self.evaluate(argument)?);
+            }
+            arguments
+        };
+
+        if let OCallable(function) = &*callee {
+            if arguments.len() != function.arity() {
+                Err(RuntimeError::new(
+                    expr.paren.clone(),
+                    &format!(
+                        "Expected {} arguments but got {}.",
+                        function.arity(),
+                        arguments.len()
+                    ),
+                )
+                .into())
+            } else {
+                Ok(function.call(self, &arguments)?)
+            }
+        } else {
+            Err(RuntimeError::new(
+                expr.paren.clone(),
+                "Can only call functions and classes.",
+            )
+            .into())
         }
     }
 
-    fn visit_grouping_expr(&mut self, expr: &expr::Grouping) -> Result<Rc<Object>> {
-        self.evaluate(&expr.expression)
+    fn visit_grouping_expr(&mut self, expr: Rc<expr::Grouping>) -> Result<Rc<Object>> {
+        self.evaluate(expr.expression.clone())
     }
 
-    fn visit_literal_expr(&mut self, expr: &expr::Literal) -> Object {
-        expr.value.clone()
+    fn visit_literal_expr(&mut self, expr: Rc<expr::Literal>) -> Result<Rc<Object>> {
+        Ok(expr.value.clone())
     }
 
-    fn visit_logical_expr(&mut self, expr: &expr::Logical) -> Result<Rc<Object>> {
-        let left = self.evaluate(&expr.left)?;
+    fn visit_logical_expr(&mut self, expr: Rc<expr::Logical>) -> Result<Rc<Object>> {
+        let left = self.evaluate(expr.left.clone())?;
 
         match expr.operator.type_ {
             TT::Or => {
@@ -220,24 +281,24 @@ impl Interpreter {
             _ => unreachable!(),
         }
 
-        self.evaluate(&expr.right)
+        self.evaluate(expr.right.clone())
     }
 
-    fn visit_unary_expr(&mut self, expr: &expr::Unary) -> Result<Rc<Object>> {
-        let right = self.evaluate(&expr.right)?;
+    fn visit_unary_expr(&mut self, expr: Rc<expr::Unary>) -> Result<Rc<Object>> {
+        let right = self.evaluate(expr.right.clone())?;
 
         match expr.operator.type_ {
             TT::Bang => Ok(Rc::new(OBoolean(!is_truthy(&right)))),
             TT::Minus => {
-                let r = check_number_operand(expr.operator, &right)?;
+                let r = check_number_operand(&expr.operator, &right)?;
                 Ok(Rc::new(ONumber(-r)))
             }
             _ => unreachable!(),
         }
     }
 
-    fn visit_variable_expr(&mut self, expr: &expr::Variable) -> Result<Rc<Object>> {
-        self.environment.borrow().get(expr.name)
+    fn visit_variable_expr(&mut self, expr: Rc<expr::Variable>) -> Result<Rc<Object>> {
+        self.environment.borrow().get(&expr.name)
     }
 }
 
@@ -245,7 +306,7 @@ fn check_number_operand(operator: &Token, operand: &Object) -> Result<f64> {
     if let ONumber(l) = operand {
         Ok(*l)
     } else {
-        Err(RuntimeError::new(operator.clone(), "Operand must be a number.").into())
+        Err(RuntimeError::new(Rc::new(operator.clone()), "Operand must be a number.").into())
     }
 }
 
@@ -257,7 +318,7 @@ fn check_number_operands(
     if let (ONumber(l), ONumber(r)) = (left, right) {
         Ok((*l, *r))
     } else {
-        Err(RuntimeError::new(operator.clone(), "Operands must be numbers.").into())
+        Err(RuntimeError::new(Rc::new(operator.clone()), "Operands must be numbers.").into())
     }
 }
 
@@ -278,6 +339,40 @@ fn is_equal(a: &Object, b: &Object) -> bool {
     }
 }
 
+#[derive(Clone, Debug)]
+struct Clock {
+    id: u128,
+}
+
+impl fmt::Display for Clock {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "<global fn>")
+    }
+}
+
+impl LoxCallable for Clock {
+    fn arity(&self) -> usize {
+        0
+    }
+
+    fn call(
+        &self,
+        _interpreter: &mut Interpreter,
+        _arguments: &[Rc<Object>],
+    ) -> Result<Rc<Object>> {
+        Ok(Rc::new(ONumber(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards.")
+                .as_secs_f64(),
+        )))
+    }
+
+    fn id(&self) -> u128 {
+        self.id
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -293,7 +388,7 @@ mod test {
         let tokens =
             Scanner::new(source, |_, _| *error_count.borrow_mut() += 1).scan_tokens();
 
-        let statements = Parser::new(&tokens, |_, _| {
+        let statements = Parser::new(tokens, |_, _| {
             *error_count.borrow_mut() += 1;
         })
         .parse()
@@ -323,21 +418,21 @@ mod test {
         let error_count = RefCell::new(0usize);
 
         let tokens = vec![
-            Token::new(TT::LeftParen, "(", Object::Nil, 1),
-            Token::new(TT::Number, "1", Object::Number(1.0), 1),
-            Token::new(TT::Plus, "+", Object::Nil, 1),
-            Token::new(TT::Number, "2", Object::Number(2.0), 1),
-            Token::new(TT::Minus, "-", Object::Nil, 1),
-            Token::new(TT::Number, "0.5", Object::Number(0.5), 1),
-            Token::new(TT::RightParen, ")", Object::Nil, 1),
-            Token::new(TT::Star, "*", Object::Nil, 1),
-            Token::new(TT::Minus, "-", Object::Nil, 1),
-            Token::new(TT::Number, "4", Object::Number(4.0), 1),
-            Token::new(TT::Semicolon, ";", Object::Nil, 1),
-            Token::new(TT::Eof, "", Object::Nil, 1),
+            Token::new(TT::LeftParen, "(", Object::Nil, 1).into(),
+            Token::new(TT::Number, "1", Object::Number(1.0), 1).into(),
+            Token::new(TT::Plus, "+", Object::Nil, 1).into(),
+            Token::new(TT::Number, "2", Object::Number(2.0), 1).into(),
+            Token::new(TT::Minus, "-", Object::Nil, 1).into(),
+            Token::new(TT::Number, "0.5", Object::Number(0.5), 1).into(),
+            Token::new(TT::RightParen, ")", Object::Nil, 1).into(),
+            Token::new(TT::Star, "*", Object::Nil, 1).into(),
+            Token::new(TT::Minus, "-", Object::Nil, 1).into(),
+            Token::new(TT::Number, "4", Object::Number(4.0), 1).into(),
+            Token::new(TT::Semicolon, ";", Object::Nil, 1).into(),
+            Token::new(TT::Eof, "", Object::Nil, 1).into(),
         ];
 
-        let statements = Parser::new(&tokens, |_, _| {
+        let statements = Parser::new(tokens, |_, _| {
             *error_count.borrow_mut() += 1;
         })
         .parse()
@@ -348,7 +443,7 @@ mod test {
         let mut interpreter = Interpreter::new(Rc::new(RefCell::new(std::io::stdout())));
 
         if let Stmt::Expression(expr_statement) = &statements[0] {
-            let res = interpreter.evaluate(&expr_statement.expression)?;
+            let res = interpreter.evaluate(expr_statement.expression.clone())?;
             assert_eq!(*res, Object::Number(-10.0));
         } else {
             panic!("Expected an expression statement");
@@ -410,6 +505,19 @@ mod test {
             for (var b = 1; a < 60; b = temp + b) { print a; temp = a; a = b; }
         ";
         let expected_output = "0\n1\n2\n3\n4\n0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n55\n";
+        positive_interpreter_test(source, expected_output)
+    }
+
+    #[test]
+    fn basic_fun() -> Result<()> {
+        let source = r#"
+            fun say_hi(first, last) {
+                print "Hi, " + first + " " + last + "!";
+            }
+
+            say_hi("Foo", "Bar");
+        "#;
+        let expected_output = "Hi, Foo Bar!\n";
         positive_interpreter_test(source, expected_output)
     }
 }

@@ -1,4 +1,5 @@
 use crate::interpreter::Interpreter;
+use crate::lox_result::Result;
 use crate::parser::Parser;
 use crate::runtime_error::RuntimeError;
 use crate::scanner::Scanner;
@@ -10,8 +11,6 @@ use std::fs;
 use std::io::{self, Write};
 use std::process;
 use std::rc::Rc;
-
-use anyhow::Result;
 
 pub struct Lox {
     had_error: RefCell<bool>,
@@ -64,7 +63,7 @@ impl Lox {
     fn run(&self, source: &str) {
         let tokens = Scanner::new(source, |l, m| self.line_error(l, m)).scan_tokens();
 
-        let statements = Parser::new(&tokens, |t, m| self.token_error(t, m))
+        let statements = Parser::new(tokens, |t, m| self.token_error(&t, m))
             .parse()
             .expect("Unexpected parse error.");
 

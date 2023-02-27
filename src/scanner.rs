@@ -2,6 +2,8 @@ use crate::object::Object;
 use crate::token::Token;
 use crate::token_type::TokenType::{self, self as TT};
 
+use std::rc::Rc;
+
 use phf::phf_map;
 
 static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
@@ -29,7 +31,7 @@ where
 {
     source: String,
     error_handler: F,
-    tokens: Vec<Token>,
+    tokens: Vec<Rc<Token>>,
     start: usize,
     current: usize,
     line: usize,
@@ -64,14 +66,14 @@ where
         }
     }
 
-    pub fn scan_tokens(mut self) -> Vec<Token> {
+    pub fn scan_tokens(mut self) -> Vec<Rc<Token>> {
         while !self.is_at_end() {
             self.start = self.current;
             self.scan_token();
         }
 
         self.tokens
-            .push(Token::new(TT::Eof, "", Object::Nil, self.line));
+            .push(Token::new(TT::Eof, "", Object::Nil, self.line).into());
         self.tokens
     }
 
@@ -213,12 +215,15 @@ where
 
     fn add_token_literal(&mut self, type_: TokenType, literal: Object) {
         let text = &self.source.as_bytes()[self.start..self.current];
-        self.tokens.push(Token::new(
-            type_,
-            std::str::from_utf8(text).expect("Invalid UTF-8"),
-            literal,
-            self.line,
-        ));
+        self.tokens.push(
+            Token::new(
+                type_,
+                std::str::from_utf8(text).expect("Invalid UTF-8"),
+                literal,
+                self.line,
+            )
+            .into(),
+        );
     }
 }
 
@@ -239,25 +244,25 @@ mod test {
         assert_eq!(
             tokens,
             vec![
-                Token::new(TT::Var, "var", Object::Nil, 1),
-                Token::new(TT::Identifier, "a", Object::Nil, 1),
-                Token::new(TT::Equal, "=", Object::Nil, 1),
-                Token::new(TT::Number, "1", Object::Number(1.0), 1),
-                Token::new(TT::Semicolon, ";", Object::Nil, 1),
-                Token::new(TT::Var, "var", Object::Nil, 1),
-                Token::new(TT::Identifier, "b", Object::Nil, 1),
-                Token::new(TT::Equal, "=", Object::Nil, 1),
-                Token::new(TT::String, "\"2\"", Object::String("2".to_string()), 1),
-                Token::new(TT::Semicolon, ";", Object::Nil, 1),
-                Token::new(TT::Print, "print", Object::Nil, 2),
-                Token::new(TT::Identifier, "a", Object::Nil, 2),
-                Token::new(TT::Plus, "+", Object::Nil, 2),
-                Token::new(TT::Number, "2.5", Object::Number(2.5), 2),
-                Token::new(TT::Semicolon, ";", Object::Nil, 2),
-                Token::new(TT::Print, "print", Object::Nil, 2),
-                Token::new(TT::Identifier, "b", Object::Nil, 2),
-                Token::new(TT::Semicolon, ";", Object::Nil, 2),
-                Token::new(TT::Eof, "", Object::Nil, 2),
+                Token::new(TT::Var, "var", Object::Nil, 1).into(),
+                Token::new(TT::Identifier, "a", Object::Nil, 1).into(),
+                Token::new(TT::Equal, "=", Object::Nil, 1).into(),
+                Token::new(TT::Number, "1", Object::Number(1.0), 1).into(),
+                Token::new(TT::Semicolon, ";", Object::Nil, 1).into(),
+                Token::new(TT::Var, "var", Object::Nil, 1).into(),
+                Token::new(TT::Identifier, "b", Object::Nil, 1).into(),
+                Token::new(TT::Equal, "=", Object::Nil, 1).into(),
+                Token::new(TT::String, "\"2\"", Object::String("2".to_string()), 1).into(),
+                Token::new(TT::Semicolon, ";", Object::Nil, 1).into(),
+                Token::new(TT::Print, "print", Object::Nil, 2).into(),
+                Token::new(TT::Identifier, "a", Object::Nil, 2).into(),
+                Token::new(TT::Plus, "+", Object::Nil, 2).into(),
+                Token::new(TT::Number, "2.5", Object::Number(2.5), 2).into(),
+                Token::new(TT::Semicolon, ";", Object::Nil, 2).into(),
+                Token::new(TT::Print, "print", Object::Nil, 2).into(),
+                Token::new(TT::Identifier, "b", Object::Nil, 2).into(),
+                Token::new(TT::Semicolon, ";", Object::Nil, 2).into(),
+                Token::new(TT::Eof, "", Object::Nil, 2).into(),
             ]
         );
     }

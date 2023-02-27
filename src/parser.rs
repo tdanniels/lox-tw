@@ -1,32 +1,40 @@
 use crate::expr::{self, Expr};
+use crate::lox_result::Result;
 use crate::object::Object;
 use crate::stmt::{self, Stmt};
 use crate::token::Token;
 use crate::token_type::TokenType::{self, self as TT};
 
 use std::cell::RefCell;
+use std::error::Error;
+use std::fmt::{self, Debug, Display};
+use std::rc::Rc;
 
-use anyhow::Result;
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-#[error("parse error")]
+#[derive(Debug)]
 struct ParseError;
 
-pub struct Parser<'a, F>
+impl Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "parse error")
+    }
+}
+
+impl Error for ParseError {}
+
+pub struct Parser<F>
 where
-    F: FnMut(&'a Token, &str),
+    F: FnMut(Rc<Token>, &str),
 {
-    tokens: &'a [Token],
+    tokens: Vec<Rc<Token>>,
     current: RefCell<usize>,
     error_handler: RefCell<F>,
 }
 
-impl<'a, F> Parser<'a, F>
+impl<F> Parser<F>
 where
-    F: FnMut(&'a Token, &str) + 'a,
+    F: FnMut(Rc<Token>, &str),
 {
-    pub fn new(tokens: &'a [Token], error_handler: F) -> Self {
+    pub fn new(tokens: Vec<Rc<Token>>, error_handler: F) -> Self {
         Self {
             tokens,
             current: 0.into(),
@@ -34,7 +42,7 @@ where
         }
     }
 
-    pub fn parse(self) -> Result<Vec<Stmt<'a>>> {
+    pub fn parse(self) -> Result<Vec<Stmt>> {
         let mut statements = Vec::new();
         while !self.is_at_end() {
             if let Some(declaration_result) = self.declaration() {
@@ -44,13 +52,15 @@ where
         Ok(statements)
     }
 
-    fn expression(&self) -> Result<Box<Expr<'a>>> {
+    fn expression(&self) -> Result<Expr> {
         self.assignment()
     }
 
-    fn declaration(&self) -> Option<Result<Stmt<'a>>> {
+    fn declaration(&self) -> Option<Result<Stmt>> {
         let stmt_result = if self.match_(&[TT::Var]) {
             self.var_declaration()
+        } else if self.match_(&[TT::Fun]) {
+            self.function("function")
         } else {
             self.statement()
         };
@@ -68,7 +78,7 @@ where
         }
     }
 
-    fn statement(&self) -> Result<Stmt<'a>> {
+    fn statement(&self) -> Result<Stmt> {
         if self.match_(&[TT::For]) {
             return self.for_statement();
         }
@@ -82,12 +92,12 @@ where
             return self.while_statement();
         }
         if self.match_(&[TT::LeftBrace]) {
-            return Ok(stmt::Block::var(self.block()?));
+            return Ok(stmt::Block::make(self.block()?));
         }
         self.expression_statement()
     }
 
-    fn for_statement(&self) -> Result<Stmt<'a>> {
+    fn for_statement(&self) -> Result<Stmt> {
         self.consume(TT::LeftParen, "Expect '(' after 'for'.")?;
 
         let initializer = if self.match_(&[TT::Semicolon]) {
@@ -112,47 +122,47 @@ where
         };
         self.consume(TT::RightParen, "Expect ')' after for clauses.")?;
 
-        let mut body = Box::new(self.statement()?);
+        let mut body = self.statement()?;
 
         if let Some(incr) = increment {
-            *body = stmt::Block::var(vec![*body, stmt::Expression::var(incr)]);
+            body = stmt::Block::make(vec![body, stmt::Expression::make(incr)]);
         }
 
         if condition.is_none() {
-            condition = Some(expr::Literal::make(&Object::Boolean(true)));
+            condition = Some(expr::Literal::make(Object::Boolean(true).into()));
         }
 
         body = stmt::While::make(condition.unwrap(), body);
 
         if let Some(init) = initializer {
-            *body = stmt::Block::var(vec![init, *body]);
+            body = stmt::Block::make(vec![init, body]);
         }
 
-        Ok(*body)
+        Ok(body)
     }
 
-    fn if_statement(&self) -> Result<Stmt<'a>> {
+    fn if_statement(&self) -> Result<Stmt> {
         self.consume(TT::LeftParen, "Expect '(' after 'if'.")?;
         let condition = self.expression()?;
         self.consume(TT::RightParen, "Expect ')' after if condition.")?;
 
-        let then_branch = Box::new(self.statement()?);
+        let then_branch = self.statement()?;
         let else_branch = if self.match_(&[TT::Else]) {
-            Some(Box::new(self.statement()?))
+            Some(self.statement()?)
         } else {
             None
         };
 
-        Ok(stmt::If::var(condition, then_branch, else_branch))
+        Ok(stmt::If::make(condition, then_branch, else_branch))
     }
 
-    fn print_statement(&self) -> Result<Stmt<'a>> {
+    fn print_statement(&self) -> Result<Stmt> {
         let value = self.expression()?;
         self.consume(TT::Semicolon, "Expect ';' after value.")?;
-        Ok(stmt::Print::var(value))
+        Ok(stmt::Print::make(value))
     }
 
-    fn var_declaration(&self) -> Result<Stmt<'a>> {
+    fn var_declaration(&self) -> Result<Stmt> {
         let name = self.consume(TT::Identifier, "Expect variable name.")?;
 
         let initializer = if self.match_(&[TT::Equal]) {
@@ -162,25 +172,49 @@ where
         };
 
         self.consume(TT::Semicolon, "Expect ';' after variable declaration.")?;
-        Ok(stmt::Var::var(name, initializer))
+        Ok(stmt::Var::make(name, initializer))
     }
 
-    fn while_statement(&self) -> Result<Stmt<'a>> {
+    fn while_statement(&self) -> Result<Stmt> {
         self.consume(TT::LeftParen, "Expect '(' after 'while'.")?;
         let condition = self.expression()?;
         self.consume(TT::RightParen, "Expect ')' after condition.")?;
         let body = self.statement()?;
 
-        Ok(stmt::While::var(condition, Box::new(body)))
+        Ok(stmt::While::make(condition, body))
     }
 
-    fn expression_statement(&self) -> Result<Stmt<'a>> {
+    fn expression_statement(&self) -> Result<Stmt> {
         let expr = self.expression()?;
         self.consume(TT::Semicolon, "Expect ';' after expression.")?;
-        Ok(stmt::Expression::var(expr))
+        Ok(stmt::Expression::make(expr))
     }
 
-    fn block(&self) -> Result<Vec<Stmt<'a>>> {
+    fn function(&self, kind: &str) -> Result<Stmt> {
+        let name = self.consume(TT::Identifier, &format!("Expect {kind} name."))?;
+        self.consume(TT::LeftParen, &format!("Expect '(' after {kind} name."))?;
+        let mut parameters = Vec::new();
+        if !self.check(TT::RightParen) {
+            loop {
+                if parameters.len() >= 255 {
+                    self.error(&self.peek(), "Can't have more than 255 parameters.");
+                }
+
+                parameters.push(self.consume(TT::Identifier, "Expect parameter name.")?);
+
+                if !self.match_(&[TT::Comma]) {
+                    break;
+                }
+            }
+        }
+        self.consume(TT::RightParen, "Expect ')' after parameters.")?;
+
+        self.consume(TT::LeftBrace, &format!("Expect '{{' before {kind} body."))?;
+        let body = self.block()?;
+        Ok(stmt::Function::make(name, parameters, body))
+    }
+
+    fn block(&self) -> Result<Vec<Stmt>> {
         let mut statements = Vec::new();
 
         while !self.check(TT::RightBrace) && !self.is_at_end() {
@@ -193,25 +227,25 @@ where
         Ok(statements)
     }
 
-    fn assignment(&self) -> Result<Box<Expr<'a>>> {
+    fn assignment(&self) -> Result<Expr> {
         let expr = self.or()?;
 
         if self.match_(&[TT::Equal]) {
             let equals = self.previous();
             let value = self.assignment()?;
 
-            if let Expr::Variable(var) = *expr {
-                let name = var.name;
+            if let Expr::Variable(var) = expr {
+                let name = var.name.clone();
                 return Ok(expr::Assign::make(name, value));
             }
 
-            self.error(equals, "Invalid assignment target.");
+            self.error(&equals, "Invalid assignment target.");
         }
 
         Ok(expr)
     }
 
-    fn or(&self) -> Result<Box<Expr<'a>>> {
+    fn or(&self) -> Result<Expr> {
         let mut expr = self.and()?;
 
         while self.match_(&[TT::Or]) {
@@ -223,7 +257,7 @@ where
         Ok(expr)
     }
 
-    fn and(&self) -> Result<Box<Expr<'a>>> {
+    fn and(&self) -> Result<Expr> {
         let mut expr = self.equality()?;
 
         while self.match_(&[TT::And]) {
@@ -235,7 +269,7 @@ where
         Ok(expr)
     }
 
-    fn equality(&self) -> Result<Box<Expr<'a>>> {
+    fn equality(&self) -> Result<Expr> {
         let mut expr = self.comparison()?;
 
         while self.match_(&[TT::BangEqual, TT::EqualEqual]) {
@@ -247,7 +281,7 @@ where
         Ok(expr)
     }
 
-    fn comparison(&self) -> Result<Box<Expr<'a>>> {
+    fn comparison(&self) -> Result<Expr> {
         let mut expr = self.term()?;
 
         while self.match_(&[TT::Greater, TT::GreaterEqual, TT::Less, TT::LessEqual]) {
@@ -259,7 +293,7 @@ where
         Ok(expr)
     }
 
-    fn term(&self) -> Result<Box<Expr<'a>>> {
+    fn term(&self) -> Result<Expr> {
         let mut expr = self.factor()?;
 
         while self.match_(&[TT::Minus, TT::Plus]) {
@@ -271,7 +305,7 @@ where
         Ok(expr)
     }
 
-    fn factor(&self) -> Result<Box<Expr<'a>>> {
+    fn factor(&self) -> Result<Expr> {
         let mut expr = self.unary()?;
 
         while self.match_(&[TT::Slash, TT::Star]) {
@@ -283,29 +317,64 @@ where
         Ok(expr)
     }
 
-    fn unary(&self) -> Result<Box<Expr<'a>>> {
+    fn unary(&self) -> Result<Expr> {
         if self.match_(&[TT::Bang, TT::Minus]) {
             let operator = self.previous();
             let right = self.unary()?;
             return Ok(expr::Unary::make(operator, right));
         }
 
-        self.primary()
+        self.call()
     }
 
-    fn primary(&self) -> Result<Box<Expr<'a>>> {
+    fn finish_call(&self, callee: Expr) -> Result<Expr> {
+        let mut arguments = Vec::new();
+
+        if !self.check(TT::RightParen) {
+            loop {
+                if arguments.len() >= 255 {
+                    self.error(&self.peek(), "Can't have more than 255 arguments.");
+                }
+
+                arguments.push(self.expression()?);
+                if !self.match_(&[TT::Comma]) {
+                    break;
+                }
+            }
+        }
+
+        let paren = self.consume(TT::RightParen, "Expect ')' after arguments.")?;
+
+        Ok(expr::Call::make(callee, paren, arguments))
+    }
+
+    fn call(&self) -> Result<Expr> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self.match_(&[TT::LeftParen]) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn primary(&self) -> Result<Expr> {
         if self.match_(&[TT::False]) {
-            return Ok(expr::Literal::make(&Object::Boolean(false)));
+            return Ok(expr::Literal::make(Object::Boolean(false).into()));
         }
         if self.match_(&[TT::True]) {
-            return Ok(expr::Literal::make(&Object::Boolean(true)));
+            return Ok(expr::Literal::make(Object::Boolean(true).into()));
         }
         if self.match_(&[TT::Nil]) {
-            return Ok(expr::Literal::make(&Object::Nil));
+            return Ok(expr::Literal::make(Object::Nil.into()));
         }
 
         if self.match_(&[TT::Number, TT::String]) {
-            return Ok(expr::Literal::make(&self.previous().literal));
+            return Ok(expr::Literal::make(self.previous().literal.clone().into()));
         }
 
         if self.match_(&[TT::Identifier]) {
@@ -319,7 +388,7 @@ where
         }
 
         let token = self.peek();
-        Err(self.error(token, "Expect expression.").into())
+        Err(self.error(&token, "Expect expression.").into())
     }
 
     fn match_(&self, types: &[TokenType]) -> bool {
@@ -332,13 +401,13 @@ where
         false
     }
 
-    fn consume(&self, type_: TokenType, message: &str) -> Result<&'a Token> {
+    fn consume(&self, type_: TokenType, message: &str) -> Result<Rc<Token>> {
         if self.check(type_) {
             return Ok(self.advance());
         }
 
         let token = self.peek();
-        Err(self.error(token, message).into())
+        Err(self.error(&token, message).into())
     }
 
     fn check(&self, type_: TokenType) -> bool {
@@ -348,7 +417,7 @@ where
         self.peek().type_ == type_
     }
 
-    fn advance(&self) -> &'a Token {
+    fn advance(&self) -> Rc<Token> {
         if !self.is_at_end() {
             *self.current.borrow_mut() += 1;
         }
@@ -359,20 +428,19 @@ where
         self.peek().type_ == TT::Eof
     }
 
-    fn peek(&self) -> &'a Token {
-        &self.tokens[*self.current.borrow()]
+    fn peek(&self) -> Rc<Token> {
+        self.tokens[*self.current.borrow()].clone()
     }
 
-    fn previous(&self) -> &'a Token {
-        &self.tokens[*self.current.borrow() - 1]
+    fn previous(&self) -> Rc<Token> {
+        self.tokens[*self.current.borrow() - 1].clone()
     }
 
-    fn error(&self, token: &'a Token, message: &str) -> ParseError {
-        (self.error_handler.borrow_mut())(token, message);
+    fn error(&self, token: &Token, message: &str) -> ParseError {
+        (self.error_handler.borrow_mut())(Rc::new(token.clone()), message);
         ParseError
     }
 
-    #[allow(unused)]
     fn synchronize(&self) {
         self.advance();
 
@@ -410,21 +478,21 @@ mod test {
         let error_count = RefCell::new(0usize);
 
         let tokens = vec![
-            Token::new(TT::LeftParen, "(", Object::Nil, 1),
-            Token::new(TT::Number, "1", Object::Number(1.0), 1),
-            Token::new(TT::Plus, "+", Object::Nil, 1),
-            Token::new(TT::Number, "2", Object::Number(2.0), 1),
-            Token::new(TT::Minus, "-", Object::Nil, 1),
-            Token::new(TT::Number, "0.5", Object::Number(0.5), 1),
-            Token::new(TT::RightParen, ")", Object::Nil, 1),
-            Token::new(TT::Star, "*", Object::Nil, 1),
-            Token::new(TT::Minus, "-", Object::Nil, 1),
-            Token::new(TT::Number, "4", Object::Number(4.0), 1),
-            Token::new(TT::Semicolon, ";", Object::Nil, 1),
-            Token::new(TT::Eof, "", Object::Nil, 1),
+            Token::new(TT::LeftParen, "(", Object::Nil, 1).into(),
+            Token::new(TT::Number, "1", Object::Number(1.0), 1).into(),
+            Token::new(TT::Plus, "+", Object::Nil, 1).into(),
+            Token::new(TT::Number, "2", Object::Number(2.0), 1).into(),
+            Token::new(TT::Minus, "-", Object::Nil, 1).into(),
+            Token::new(TT::Number, "0.5", Object::Number(0.5), 1).into(),
+            Token::new(TT::RightParen, ")", Object::Nil, 1).into(),
+            Token::new(TT::Star, "*", Object::Nil, 1).into(),
+            Token::new(TT::Minus, "-", Object::Nil, 1).into(),
+            Token::new(TT::Number, "4", Object::Number(4.0), 1).into(),
+            Token::new(TT::Semicolon, ";", Object::Nil, 1).into(),
+            Token::new(TT::Eof, "", Object::Nil, 1).into(),
         ];
 
-        let statements = Parser::new(&tokens, |_, _| {
+        let statements = Parser::new(tokens, |_, _| {
             *error_count.borrow_mut() += 1;
         })
         .parse()

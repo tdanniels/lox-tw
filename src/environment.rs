@@ -1,11 +1,10 @@
+use crate::lox_result::Result;
 use crate::runtime_error::RuntimeError;
 use crate::{object::Object, token::Token};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-
-use anyhow::Result;
 
 pub struct Environment {
     enclosing: Option<Rc<RefCell<Environment>>>,
@@ -35,7 +34,7 @@ impl Environment {
             )
             .ok_or(
                 RuntimeError::new(
-                    name.clone(),
+                    Rc::new(name.clone()),
                     &format!("Undefined variable '{}'.", name.lexeme),
                 )
                 .into(),
@@ -54,7 +53,7 @@ impl Environment {
         }
 
         Err(RuntimeError::new(
-            name.clone(),
+            Rc::new(name.clone()),
             &format!("Undefined variable {}.", name.lexeme),
         )
         .into())

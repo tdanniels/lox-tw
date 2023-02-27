@@ -31,6 +31,7 @@ fn visit(expr: &Expr) -> String {
     match expr {
         Expr::Assign(ex) => parenthesize!(&ex.name.lexeme, &ex.value),
         Expr::Binary(ex) => parenthesize!(&ex.operator.lexeme, &ex.left, &ex.right),
+        Expr::Call(ex) => parenthesize!("call", &ex.callee),
         Expr::Grouping(ex) => parenthesize!("group", &ex.expression),
         Expr::Literal(ex) => ex.value.to_string(),
         Expr::Logical(ex) => parenthesize!(&ex.operator.lexeme, &ex.left, &ex.right),
@@ -48,14 +49,14 @@ mod test {
 
     #[test]
     fn print_exprs() {
-        let minus = Token::new(TokenType::Minus, "-", Object::Nil, 1);
-        let star = Token::new(TokenType::Star, "*", Object::Nil, 1);
-        let num123 = Object::Number(123.0);
-        let num4567 = Object::Number(45.67);
+        let minus = Token::new(TokenType::Minus, "-", Object::Nil, 1).into();
+        let star = Token::new(TokenType::Star, "*", Object::Nil, 1).into();
+        let num123 = Object::Number(123.0).into();
+        let num4567 = Object::Number(45.67).into();
         let expr = Binary::make(
-            Unary::make(&minus, Literal::make(&num123)),
-            &star,
-            Grouping::make(Literal::make(&num4567)),
+            Unary::make(minus, Literal::make(num123)),
+            star,
+            Grouping::make(Literal::make(num4567)),
         );
         assert_eq!(
             AstPrinter::print(&expr).as_str(),

@@ -1,32 +1,24 @@
 use crate::object::Object;
 use crate::token::Token;
 
-crate::ast_struct!(Expr, 'a, Assign, name, &'a Token, value, Box<Expr<'a>>);
-crate::ast_struct!(
-    Expr,
-    'a,
-    Binary,
-    left,
-    Box<Expr<'a>>,
-    operator,
-    &'a Token,
-    right,
-    Box<Expr<'a>>
-);
-crate::ast_struct!(Expr, 'a, Grouping, expression, Box<Expr<'a>>);
-crate::ast_struct!(Expr, 'a, Literal, value, &'a Object);
-crate::ast_struct!(
-    Expr,
-    'a,
-    Logical,
-    left,
-    Box<Expr<'a>>,
-    operator,
-    &'a Token,
-    right,
-    Box<Expr<'a>>
-);
-crate::ast_struct!(Expr, 'a, Unary, operator, &'a Token, right, Box<Expr<'a>>);
-crate::ast_struct!(Expr, 'a, Variable, name, &'a Token);
+use std::rc::Rc;
 
-crate::ast_enum!(Expr, 'a, Assign, Binary, Grouping, Literal, Logical, Unary, Variable);
+crate::ast_struct!(Expr, Assign, name, Rc<Token>, value, Expr);
+crate::ast_struct!(Expr, Binary, left, Expr, operator, Rc<Token>, right, Expr);
+crate::ast_struct!(
+    Expr,
+    Call,
+    callee,
+    Expr,
+    paren,
+    Rc<Token>,
+    arguments,
+    Vec<Expr>
+);
+crate::ast_struct!(Expr, Grouping, expression, Expr);
+crate::ast_struct!(Expr, Literal, value, Rc<Object>);
+crate::ast_struct!(Expr, Logical, left, Expr, operator, Rc<Token>, right, Expr);
+crate::ast_struct!(Expr, Unary, operator, Rc<Token>, right, Expr);
+crate::ast_struct!(Expr, Variable, name, Rc<Token>);
+
+crate::ast_enum!(Expr, Assign, Binary, Call, Grouping, Literal, Logical, Unary, Variable);

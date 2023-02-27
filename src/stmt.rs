@@ -1,21 +1,32 @@
 use crate::expr::Expr;
 use crate::token::Token;
 
-crate::ast_struct!(Stmt, 'a, Block, statements, Vec<Stmt<'a>>);
-crate::ast_struct!(Stmt, 'a, Expression, expression, Box<Expr<'a>>);
+use std::rc::Rc;
+
+crate::ast_struct!(Stmt, Block, statements, Vec<Stmt>);
+crate::ast_struct!(Stmt, Expression, expression, Expr);
 crate::ast_struct!(
     Stmt,
-    'a,
+    Function,
+    name,
+    Rc<Token>,
+    params,
+    Vec<Rc<Token>>,
+    body,
+    Vec<Stmt>
+);
+crate::ast_struct!(
+    Stmt,
     If,
     condition,
-    Box<Expr<'a>>,
+    Expr,
     then_branch,
-    Box<Stmt<'a>>,
+    Stmt,
     else_branch,
-    Option<Box<Stmt<'a>>>
+    Option<Stmt>
 );
-crate::ast_struct!(Stmt, 'a, Print, expression, Box<Expr<'a>>);
-crate::ast_struct!(Stmt, 'a, Var, name, &'a Token, initializer, Option<Box<Expr<'a>>>);
-crate::ast_struct!(Stmt, 'a, While, condition, Box<Expr<'a>>, body, Box<Stmt<'a>>);
+crate::ast_struct!(Stmt, Print, expression, Expr);
+crate::ast_struct!(Stmt, Var, name, Rc<Token>, initializer, Option<Expr>);
+crate::ast_struct!(Stmt, While, condition, Expr, body, Stmt);
 
-crate::ast_enum!(Stmt, 'a, Block, Expression, If, Print, Var, While);
+crate::ast_enum!(Stmt, Block, Expression, Function, If, Print, Var, While);
