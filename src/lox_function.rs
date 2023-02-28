@@ -2,6 +2,7 @@ use crate::environment::Environment;
 use crate::interpreter::Interpreter;
 use crate::lox_callable::LoxCallable;
 use crate::lox_result::Result;
+use crate::lox_return::Return;
 use crate::object::Object;
 use crate::stmt;
 use crate::unique_id::unique_id;
@@ -13,13 +14,15 @@ use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct LoxFunction {
+    closure: Rc<RefCell<Environment>>,
     declaration: Rc<stmt::Function>,
     id: u128,
 }
 
 impl LoxFunction {
-    pub fn new(declaration: Rc<stmt::Function>) -> Self {
+    pub fn new(declaration: Rc<stmt::Function>, closure: Rc<RefCell<Environment>>) -> Self {
         Self {
+            closure,
             declaration,
             id: unique_id(),
         }
@@ -42,13 +45,20 @@ impl LoxCallable for LoxFunction {
         interpreter: &mut Interpreter,
         arguments: &[Rc<Object>],
     ) -> Result<Rc<Object>> {
-        let mut environment = Environment::new(Some(interpreter.globals.clone()));
+        let mut environment = Environment::new(Some(self.closure.clone()));
         for (param, arg) in zip(self.declaration.params.iter(), arguments.iter()) {
             environment.define(&param.lexeme, arg.clone());
         }
 
-        interpreter
-            .execute_block(&self.declaration.body, Rc::new(RefCell::new(environment)))?;
+        if let Err(err) = interpreter
+            .execute_block(&self.declaration.body, Rc::new(RefCell::new(environment)))
+        {
+            if let Some(return_value) = err.downcast_ref::<Return>() {
+                return Ok(return_value.value.clone());
+            } else {
+                return Err(err);
+            }
+        }
         Ok(Rc::new(Object::Nil))
     }
 

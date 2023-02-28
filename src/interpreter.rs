@@ -3,6 +3,7 @@ use crate::expr::{self, Expr};
 use crate::lox_callable::LoxCallable;
 use crate::lox_function::LoxFunction;
 use crate::lox_result::Result;
+use crate::lox_return::Return;
 use crate::object::Object::{
     self, Boolean as OBoolean, Callable as OCallable, Nil as ONil, Number as ONumber,
     String as OString,
@@ -67,6 +68,7 @@ impl Interpreter {
             Stmt::Function(s) => self.visit_function_stmt(s),
             Stmt::If(s) => self.visit_if_stmt(s),
             Stmt::Print(s) => self.visit_print_stmt(s),
+            Stmt::Return(s) => self.visit_return_statement(s),
             Stmt::Var(s) => self.visit_var_stmt(s),
             Stmt::While(s) => self.visit_while_statement(s),
         }
@@ -121,7 +123,7 @@ impl Interpreter {
     }
 
     fn visit_function_stmt(&mut self, stmt: Rc<stmt::Function>) -> Result<()> {
-        let function = Rc::new(LoxFunction::new(stmt.clone()));
+        let function = Rc::new(LoxFunction::new(stmt.clone(), self.environment.clone()));
         self.environment
             .borrow_mut()
             .define(&stmt.name.lexeme, Rc::new(OCallable(function)));
@@ -141,6 +143,15 @@ impl Interpreter {
         let value = self.evaluate(stmt.expression.clone())?;
         writeln!(self.writer.borrow_mut(), "{value}")?;
         Ok(())
+    }
+
+    fn visit_return_statement(&mut self, stmt: Rc<stmt::Return>) -> Result<()> {
+        let value = match &stmt.value {
+            Some(expr) => self.evaluate(expr.clone())?,
+            None => Rc::new(ONil),
+        };
+
+        Err(Return::new(value).into())
     }
 
     fn visit_var_stmt(&mut self, stmt: Rc<stmt::Var>) -> Result<()> {
@@ -518,6 +529,43 @@ mod test {
             say_hi("Foo", "Bar");
         "#;
         let expected_output = "Hi, Foo Bar!\n";
+        positive_interpreter_test(source, expected_output)
+    }
+
+    #[test]
+    fn fib() -> Result<()> {
+        let source = r"
+            fun fib(n) {
+                if (n <= 1) return n;
+                return fib(n - 2) + fib(n - 1);
+            }
+
+            for (var i = 0; i < 10; i = i + 1) {
+                print fib(i);
+            }
+        ";
+        let expected_output = "0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n";
+        positive_interpreter_test(source, expected_output)
+    }
+
+    #[test]
+    fn counter_closure() -> Result<()> {
+        let source = r"
+            fun make_counter() {
+                var i = 0;
+                fun count() {
+                    i = i + 1;
+                    print i;
+                }
+                return count;
+            }
+
+            var counter = make_counter();
+            counter();
+            counter();
+            counter();
+        ";
+        let expected_output = "1\n2\n3\n";
         positive_interpreter_test(source, expected_output)
     }
 }

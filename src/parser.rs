@@ -88,6 +88,9 @@ where
         if self.match_(&[TT::Print]) {
             return self.print_statement();
         }
+        if self.match_(&[TT::Return]) {
+            return self.return_statement();
+        }
         if self.match_(&[TT::While]) {
             return self.while_statement();
         }
@@ -160,6 +163,19 @@ where
         let value = self.expression()?;
         self.consume(TT::Semicolon, "Expect ';' after value.")?;
         Ok(stmt::Print::make(value))
+    }
+
+    fn return_statement(&self) -> Result<Stmt> {
+        let keyword = self.previous();
+        let value = if self.check(TT::Semicolon) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+
+        self.consume(TT::Semicolon, "Expect ';' after return value.")?;
+
+        Ok(stmt::Return::make(keyword, value))
     }
 
     fn var_declaration(&self) -> Result<Stmt> {

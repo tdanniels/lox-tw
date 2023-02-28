@@ -6,6 +6,7 @@ mod lox;
 mod lox_callable;
 mod lox_function;
 mod lox_result;
+mod lox_return;
 mod object;
 mod parser;
 mod pretty_printer;
