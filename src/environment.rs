@@ -2,25 +2,25 @@ use crate::lox_result::Result;
 use crate::runtime_error::RuntimeError;
 use crate::{object::Object, token::Token};
 
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 
-#[derive(Clone, Debug)]
+use gc::{Finalize, Gc, GcCell, Trace};
+
+#[derive(Clone, Debug, Finalize, Trace)]
 pub struct Environment {
-    enclosing: Option<Rc<RefCell<Environment>>>,
-    values: HashMap<String, Rc<Object>>,
+    enclosing: Option<Gc<GcCell<Environment>>>,
+    values: HashMap<String, Gc<Object>>,
 }
 
 impl Environment {
-    pub fn new(enclosing: Option<Rc<RefCell<Environment>>>) -> Self {
+    pub fn new(enclosing: Option<Gc<GcCell<Environment>>>) -> Self {
         Self {
             enclosing,
             values: HashMap::new(),
         }
     }
 
-    pub fn get(&self, name: &Token) -> Result<Rc<Object>> {
+    pub fn get(&self, name: &Token) -> Result<Gc<Object>> {
         self.values
             .get(&name.lexeme)
             .map_or_else(
@@ -31,18 +31,18 @@ impl Environment {
                         None
                     }
                 },
-                |value| Some(Rc::clone(value)),
+                |value| Some(Gc::clone(value)),
             )
             .ok_or(
                 RuntimeError::new(
-                    Rc::new(name.clone()),
+                    Gc::new(name.clone()),
                     &format!("Undefined variable '{}'.", name.lexeme),
                 )
                 .into(),
             )
     }
 
-    pub fn assign(&mut self, name: &Token, value: Rc<Object>) -> Result<()> {
+    pub fn assign(&mut self, name: &Token, value: Gc<Object>) -> Result<()> {
         if let Some(v) = self.values.get_mut(&name.lexeme) {
             *v = value;
             return Ok(());
@@ -54,13 +54,13 @@ impl Environment {
         }
 
         Err(RuntimeError::new(
-            Rc::new(name.clone()),
+            Gc::new(name.clone()),
             &format!("Undefined variable {}.", name.lexeme),
         )
         .into())
     }
 
-    pub fn define(&mut self, name: &str, value: Rc<Object>) {
-        self.values.insert(name.to_owned(), Rc::clone(&value));
+    pub fn define(&mut self, name: &str, value: Gc<Object>) {
+        self.values.insert(name.to_owned(), Gc::clone(&value));
     }
 }

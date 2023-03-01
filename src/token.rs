@@ -3,7 +3,9 @@ use crate::token_type::TokenType;
 
 use std::fmt;
 
-#[derive(Clone, Debug, PartialEq)]
+use gc::{Finalize, Trace};
+
+#[derive(Clone, Debug, Finalize, Trace, PartialEq)]
 pub struct Token {
     pub type_: TokenType,
     pub lexeme: String,

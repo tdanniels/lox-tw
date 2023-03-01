@@ -8,7 +8,8 @@ use crate::token_type::TokenType::{self, self as TT};
 use std::cell::RefCell;
 use std::error::Error;
 use std::fmt::{self, Debug, Display};
-use std::rc::Rc;
+
+use gc::Gc;
 
 #[derive(Debug)]
 struct ParseError;
@@ -23,18 +24,18 @@ impl Error for ParseError {}
 
 pub struct Parser<F>
 where
-    F: FnMut(Rc<Token>, &str),
+    F: FnMut(Gc<Token>, &str),
 {
-    tokens: Vec<Rc<Token>>,
+    tokens: Vec<Gc<Token>>,
     current: RefCell<usize>,
     error_handler: RefCell<F>,
 }
 
 impl<F> Parser<F>
 where
-    F: FnMut(Rc<Token>, &str),
+    F: FnMut(Gc<Token>, &str),
 {
-    pub fn new(tokens: Vec<Rc<Token>>, error_handler: F) -> Self {
+    pub fn new(tokens: Vec<Gc<Token>>, error_handler: F) -> Self {
         Self {
             tokens,
             current: 0.into(),
@@ -250,7 +251,7 @@ where
             let equals = self.previous();
             let value = self.assignment()?;
 
-            if let Expr::Variable(var) = expr {
+            if let Expr::Variable(var) = &expr {
                 let name = var.name.clone();
                 return Ok(expr::Assign::make(name, value));
             }
@@ -409,7 +410,7 @@ where
 
     fn match_(&self, types: &[TokenType]) -> bool {
         for type_ in types {
-            if self.check(*type_) {
+            if self.check(type_.clone()) {
                 self.advance();
                 return true;
             }
@@ -417,7 +418,7 @@ where
         false
     }
 
-    fn consume(&self, type_: TokenType, message: &str) -> Result<Rc<Token>> {
+    fn consume(&self, type_: TokenType, message: &str) -> Result<Gc<Token>> {
         if self.check(type_) {
             return Ok(self.advance());
         }
@@ -433,7 +434,7 @@ where
         self.peek().type_ == type_
     }
 
-    fn advance(&self) -> Rc<Token> {
+    fn advance(&self) -> Gc<Token> {
         if !self.is_at_end() {
             *self.current.borrow_mut() += 1;
         }
@@ -444,16 +445,16 @@ where
         self.peek().type_ == TT::Eof
     }
 
-    fn peek(&self) -> Rc<Token> {
+    fn peek(&self) -> Gc<Token> {
         self.tokens[*self.current.borrow()].clone()
     }
 
-    fn previous(&self) -> Rc<Token> {
+    fn previous(&self) -> Gc<Token> {
         self.tokens[*self.current.borrow() - 1].clone()
     }
 
     fn error(&self, token: &Token, message: &str) -> ParseError {
-        (self.error_handler.borrow_mut())(Rc::new(token.clone()), message);
+        (self.error_handler.borrow_mut())(Gc::new(token.clone()), message);
         ParseError
     }
 

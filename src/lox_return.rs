@@ -2,15 +2,16 @@ use crate::object::Object;
 
 use std::error::Error;
 use std::fmt::{self, Display};
-use std::rc::Rc;
 
-#[derive(Debug)]
+use gc::{Finalize, Gc, Trace};
+
+#[derive(Debug, Finalize, Trace)]
 pub struct Return {
-    pub value: Rc<Object>,
+    pub value: Gc<Object>,
 }
 
 impl Return {
-    pub fn new(value: Rc<Object>) -> Self {
+    pub fn new(value: Gc<Object>) -> Self {
         Self { value }
     }
 }

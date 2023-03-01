@@ -1,6 +1,6 @@
 use crate::environment::Environment;
 use crate::expr::{self, Expr};
-use crate::lox_callable::LoxCallable;
+use crate::lox_callable::{Clock, LoxCallable};
 use crate::lox_function::LoxFunction;
 use crate::lox_result::Result;
 use crate::lox_return::Return;
@@ -12,33 +12,38 @@ use crate::runtime_error::RuntimeError;
 use crate::stmt::{self, Stmt};
 use crate::token::Token;
 use crate::token_type::TokenType as TT;
-use crate::unique_id::unique_id;
 
-use std::cell::RefCell;
-use std::fmt;
-use std::io;
-use std::rc::Rc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::io::Write;
 
+use gc::{Finalize, Gc, GcCell, Trace};
+
+#[derive(Clone, Finalize, Trace)]
+pub enum InterpreterOutput {
+    StdOut,
+    #[allow(unused)]
+    ByteVec(Gc<GcCell<Vec<u8>>>),
+}
+
+#[derive(Finalize, Trace)]
 pub struct Interpreter {
-    pub globals: Rc<RefCell<Environment>>,
-    environment: Rc<RefCell<Environment>>,
-    writer: Rc<RefCell<dyn io::Write>>,
+    pub globals: Gc<GcCell<Environment>>,
+    environment: Gc<GcCell<Environment>>,
+    output: InterpreterOutput,
 }
 
 impl Interpreter {
-    pub fn new(writer: Rc<RefCell<dyn io::Write>>) -> Self {
-        let globals = Rc::new(RefCell::new(Environment::new(None)));
+    pub fn new(output: InterpreterOutput) -> Self {
+        let globals = Gc::new(GcCell::new(Environment::new(None)));
 
         globals.borrow_mut().define(
             "clock",
-            Rc::new(OCallable(Rc::new(Clock { id: unique_id() }))),
+            Gc::new(OCallable(Gc::new(LoxCallable::Clock(Clock::new())))),
         );
 
         Self {
-            globals: Rc::clone(&globals),
-            environment: Rc::clone(&globals),
-            writer,
+            globals: Gc::clone(&globals),
+            environment: Gc::clone(&globals),
+            output,
         }
     }
 
@@ -62,24 +67,24 @@ impl Interpreter {
     }
 
     fn execute(&mut self, stmt: Stmt) -> Result<()> {
-        match stmt {
-            Stmt::Block(s) => self.visit_block_stmt(s),
-            Stmt::Expression(s) => self.visit_expression_stmt(s),
-            Stmt::Function(s) => self.visit_function_stmt(s),
-            Stmt::If(s) => self.visit_if_stmt(s),
-            Stmt::Print(s) => self.visit_print_stmt(s),
-            Stmt::Return(s) => self.visit_return_statement(s),
-            Stmt::Var(s) => self.visit_var_stmt(s),
-            Stmt::While(s) => self.visit_while_statement(s),
+        match &stmt {
+            Stmt::Block(s) => self.visit_block_stmt(s.clone()),
+            Stmt::Expression(s) => self.visit_expression_stmt(s.clone()),
+            Stmt::Function(s) => self.visit_function_stmt(s.clone()),
+            Stmt::If(s) => self.visit_if_stmt(s.clone()),
+            Stmt::Print(s) => self.visit_print_stmt(s.clone()),
+            Stmt::Return(s) => self.visit_return_statement(s.clone()),
+            Stmt::Var(s) => self.visit_var_stmt(s.clone()),
+            Stmt::While(s) => self.visit_while_statement(s.clone()),
         }
     }
 
     pub fn execute_block(
         &mut self,
         statements: &[Stmt],
-        environment: Rc<RefCell<Environment>>,
+        environment: Gc<GcCell<Environment>>,
     ) -> Result<()> {
-        let previous = Rc::clone(&self.environment);
+        let previous = Gc::clone(&self.environment);
         self.environment = environment;
 
         for statement in statements {
@@ -94,43 +99,46 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_block_stmt(&mut self, stmt: Rc<stmt::Block>) -> Result<()> {
+    fn visit_block_stmt(&mut self, stmt: Gc<stmt::Block>) -> Result<()> {
         self.execute_block(
             &stmt.statements,
-            Rc::new(RefCell::new(Environment::new(Some(Rc::clone(
+            Gc::new(GcCell::new(Environment::new(Some(Gc::clone(
                 &self.environment,
             ))))),
         )?;
         Ok(())
     }
 
-    fn evaluate(&mut self, expr: Expr) -> Result<Rc<Object>> {
-        match expr {
-            Expr::Assign(ex) => self.visit_assign_expr(ex),
-            Expr::Binary(ex) => self.visit_binary_expr(ex),
-            Expr::Call(ex) => self.visit_call_expr(ex),
-            Expr::Grouping(ex) => self.visit_grouping_expr(ex),
-            Expr::Literal(ex) => self.visit_literal_expr(ex),
-            Expr::Logical(ex) => self.visit_logical_expr(ex),
-            Expr::Unary(ex) => self.visit_unary_expr(ex),
-            Expr::Variable(ex) => self.visit_variable_expr(ex),
+    fn evaluate(&mut self, expr: Expr) -> Result<Gc<Object>> {
+        match &expr {
+            Expr::Assign(ex) => self.visit_assign_expr(ex.clone()),
+            Expr::Binary(ex) => self.visit_binary_expr(ex.clone()),
+            Expr::Call(ex) => self.visit_call_expr(ex.clone()),
+            Expr::Grouping(ex) => self.visit_grouping_expr(ex.clone()),
+            Expr::Literal(ex) => self.visit_literal_expr(ex.clone()),
+            Expr::Logical(ex) => self.visit_logical_expr(ex.clone()),
+            Expr::Unary(ex) => self.visit_unary_expr(ex.clone()),
+            Expr::Variable(ex) => self.visit_variable_expr(ex.clone()),
         }
     }
 
-    fn visit_expression_stmt(&mut self, stmt: Rc<stmt::Expression>) -> Result<()> {
+    fn visit_expression_stmt(&mut self, stmt: Gc<stmt::Expression>) -> Result<()> {
         self.evaluate(stmt.expression.clone())?;
         Ok(())
     }
 
-    fn visit_function_stmt(&mut self, stmt: Rc<stmt::Function>) -> Result<()> {
-        let function = Rc::new(LoxFunction::new(stmt.clone(), self.environment.clone()));
+    fn visit_function_stmt(&mut self, stmt: Gc<stmt::Function>) -> Result<()> {
+        let function = Gc::new(LoxCallable::Function(LoxFunction::new(
+            stmt.clone(),
+            self.environment.clone(),
+        )));
         self.environment
             .borrow_mut()
-            .define(&stmt.name.lexeme, Rc::new(OCallable(function)));
+            .define(&stmt.name.lexeme, Gc::new(OCallable(function)));
         Ok(())
     }
 
-    fn visit_if_stmt(&mut self, stmt: Rc<stmt::If>) -> Result<()> {
+    fn visit_if_stmt(&mut self, stmt: Gc<stmt::If>) -> Result<()> {
         if is_truthy(&*self.evaluate(stmt.condition.clone())?) {
             self.execute(stmt.then_branch.clone())?;
         } else if let Some(else_branch) = stmt.else_branch.clone() {
@@ -139,26 +147,29 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_print_stmt(&mut self, stmt: Rc<stmt::Print>) -> Result<()> {
+    fn visit_print_stmt(&mut self, stmt: Gc<stmt::Print>) -> Result<()> {
         let value = self.evaluate(stmt.expression.clone())?;
-        writeln!(self.writer.borrow_mut(), "{value}")?;
+        match &self.output {
+            InterpreterOutput::ByteVec(v) => writeln!(v.borrow_mut(), "{value}")?,
+            InterpreterOutput::StdOut => println!("{value}"),
+        }
         Ok(())
     }
 
-    fn visit_return_statement(&mut self, stmt: Rc<stmt::Return>) -> Result<()> {
+    fn visit_return_statement(&mut self, stmt: Gc<stmt::Return>) -> Result<()> {
         let value = match &stmt.value {
             Some(expr) => self.evaluate(expr.clone())?,
-            None => Rc::new(ONil),
+            None => Gc::new(ONil),
         };
 
         Err(Return::new(value).into())
     }
 
-    fn visit_var_stmt(&mut self, stmt: Rc<stmt::Var>) -> Result<()> {
+    fn visit_var_stmt(&mut self, stmt: Gc<stmt::Var>) -> Result<()> {
         let value = if let Some(initializer) = stmt.initializer.clone() {
             self.evaluate(initializer)?
         } else {
-            Rc::new(Object::Nil)
+            Gc::new(ONil)
         };
 
         self.environment
@@ -167,22 +178,22 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_while_statement(&mut self, stmt: Rc<stmt::While>) -> Result<()> {
+    fn visit_while_statement(&mut self, stmt: Gc<stmt::While>) -> Result<()> {
         while is_truthy(&*self.evaluate(stmt.condition.clone())?) {
             self.execute(stmt.body.clone())?;
         }
         Ok(())
     }
 
-    fn visit_assign_expr(&mut self, expr: Rc<expr::Assign>) -> Result<Rc<Object>> {
+    fn visit_assign_expr(&mut self, expr: Gc<expr::Assign>) -> Result<Gc<Object>> {
         let value = self.evaluate(expr.value.clone())?;
         self.environment
             .borrow_mut()
-            .assign(&expr.name, Rc::clone(&value))?;
+            .assign(&expr.name, Gc::clone(&value))?;
         Ok(value)
     }
 
-    fn visit_binary_expr(&mut self, expr: Rc<expr::Binary>) -> Result<Rc<Object>> {
+    fn visit_binary_expr(&mut self, expr: Gc<expr::Binary>) -> Result<Gc<Object>> {
         let left = self.evaluate(expr.left.clone())?;
         let right = self.evaluate(expr.right.clone())?;
 
@@ -230,10 +241,10 @@ impl Interpreter {
             }
             _ => unreachable!(),
         };
-        Ok(Rc::new(obj))
+        Ok(Gc::new(obj))
     }
 
-    fn visit_call_expr(&mut self, expr: Rc<expr::Call>) -> Result<Rc<Object>> {
+    fn visit_call_expr(&mut self, expr: Gc<expr::Call>) -> Result<Gc<Object>> {
         let callee = self.evaluate(expr.callee.clone())?;
 
         let arguments = {
@@ -267,15 +278,15 @@ impl Interpreter {
         }
     }
 
-    fn visit_grouping_expr(&mut self, expr: Rc<expr::Grouping>) -> Result<Rc<Object>> {
+    fn visit_grouping_expr(&mut self, expr: Gc<expr::Grouping>) -> Result<Gc<Object>> {
         self.evaluate(expr.expression.clone())
     }
 
-    fn visit_literal_expr(&mut self, expr: Rc<expr::Literal>) -> Result<Rc<Object>> {
+    fn visit_literal_expr(&mut self, expr: Gc<expr::Literal>) -> Result<Gc<Object>> {
         Ok(expr.value.clone())
     }
 
-    fn visit_logical_expr(&mut self, expr: Rc<expr::Logical>) -> Result<Rc<Object>> {
+    fn visit_logical_expr(&mut self, expr: Gc<expr::Logical>) -> Result<Gc<Object>> {
         let left = self.evaluate(expr.left.clone())?;
 
         match expr.operator.type_ {
@@ -295,20 +306,20 @@ impl Interpreter {
         self.evaluate(expr.right.clone())
     }
 
-    fn visit_unary_expr(&mut self, expr: Rc<expr::Unary>) -> Result<Rc<Object>> {
+    fn visit_unary_expr(&mut self, expr: Gc<expr::Unary>) -> Result<Gc<Object>> {
         let right = self.evaluate(expr.right.clone())?;
 
         match expr.operator.type_ {
-            TT::Bang => Ok(Rc::new(OBoolean(!is_truthy(&right)))),
+            TT::Bang => Ok(Gc::new(OBoolean(!is_truthy(&right)))),
             TT::Minus => {
                 let r = check_number_operand(&expr.operator, &right)?;
-                Ok(Rc::new(ONumber(-r)))
+                Ok(Gc::new(ONumber(-r)))
             }
             _ => unreachable!(),
         }
     }
 
-    fn visit_variable_expr(&mut self, expr: Rc<expr::Variable>) -> Result<Rc<Object>> {
+    fn visit_variable_expr(&mut self, expr: Gc<expr::Variable>) -> Result<Gc<Object>> {
         self.environment.borrow().get(&expr.name)
     }
 }
@@ -317,7 +328,7 @@ fn check_number_operand(operator: &Token, operand: &Object) -> Result<f64> {
     if let ONumber(l) = operand {
         Ok(*l)
     } else {
-        Err(RuntimeError::new(Rc::new(operator.clone()), "Operand must be a number.").into())
+        Err(RuntimeError::new(Gc::new(operator.clone()), "Operand must be a number.").into())
     }
 }
 
@@ -329,7 +340,7 @@ fn check_number_operands(
     if let (ONumber(l), ONumber(r)) = (left, right) {
         Ok((*l, *r))
     } else {
-        Err(RuntimeError::new(Rc::new(operator.clone()), "Operands must be numbers.").into())
+        Err(RuntimeError::new(Gc::new(operator.clone()), "Operands must be numbers.").into())
     }
 }
 
@@ -350,51 +361,18 @@ fn is_equal(a: &Object, b: &Object) -> bool {
     }
 }
 
-#[derive(Clone, Debug)]
-struct Clock {
-    id: u128,
-}
-
-impl fmt::Display for Clock {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<global fn>")
-    }
-}
-
-impl LoxCallable for Clock {
-    fn arity(&self) -> usize {
-        0
-    }
-
-    fn call(
-        &self,
-        _interpreter: &mut Interpreter,
-        _arguments: &[Rc<Object>],
-    ) -> Result<Rc<Object>> {
-        Ok(Rc::new(ONumber(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("Time went backwards.")
-                .as_secs_f64(),
-        )))
-    }
-
-    fn id(&self) -> u128 {
-        self.id
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::parser::Parser;
     use crate::scanner::Scanner;
 
-    use std::cell::RefCell;
     use std::str;
 
+    use gc::{Gc, GcCell};
+
     fn positive_interpreter_test(source: &str, expected_output: &str) -> Result<()> {
-        let error_count = RefCell::new(0usize);
+        let error_count = GcCell::new(0usize);
 
         let tokens =
             Scanner::new(source, |_, _| *error_count.borrow_mut() += 1).scan_tokens();
@@ -407,8 +385,8 @@ mod test {
 
         assert_eq!(*error_count.borrow(), 0);
 
-        let output = Rc::new(RefCell::new(Vec::new()));
-        let mut interpreter = Interpreter::new(output.clone());
+        let output = Gc::new(GcCell::new(Vec::new()));
+        let mut interpreter = Interpreter::new(InterpreterOutput::ByteVec(output.clone()));
         interpreter.interpret(&statements, |_| *error_count.borrow_mut() += 1);
 
         assert_eq!(*error_count.borrow(), 0);
@@ -426,7 +404,7 @@ mod test {
 
     #[test]
     fn evaluate() -> Result<()> {
-        let error_count = RefCell::new(0usize);
+        let error_count = GcCell::new(0usize);
 
         let tokens = vec![
             Token::new(TT::LeftParen, "(", Object::Nil, 1).into(),
@@ -451,7 +429,7 @@ mod test {
 
         assert_eq!(*error_count.borrow(), 0);
 
-        let mut interpreter = Interpreter::new(Rc::new(RefCell::new(std::io::stdout())));
+        let mut interpreter = Interpreter::new(InterpreterOutput::StdOut);
 
         if let Stmt::Expression(expr_statement) = &statements[0] {
             let res = interpreter.evaluate(expr_statement.expression.clone())?;

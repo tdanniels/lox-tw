@@ -1,17 +1,18 @@
+use crate::token::Token;
+
 use std::error::Error;
 use std::fmt::{self, Display};
-use std::rc::Rc;
 
-use crate::token::Token;
+use gc::Gc;
 
 #[derive(Debug)]
 pub struct RuntimeError {
-    pub token: Rc<Token>,
+    pub token: Gc<Token>,
     pub message: String,
 }
 
 impl RuntimeError {
-    pub fn new(token: Rc<Token>, message: &str) -> Self {
+    pub fn new(token: Gc<Token>, message: &str) -> Self {
         Self {
             token,
             message: message.to_string(),

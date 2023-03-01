@@ -2,8 +2,7 @@ use crate::object::Object;
 use crate::token::Token;
 use crate::token_type::TokenType::{self, self as TT};
 
-use std::rc::Rc;
-
+use gc::Gc;
 use phf::phf_map;
 
 static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
@@ -31,7 +30,7 @@ where
 {
     source: String,
     error_handler: F,
-    tokens: Vec<Rc<Token>>,
+    tokens: Vec<Gc<Token>>,
     start: usize,
     current: usize,
     line: usize,
@@ -66,7 +65,7 @@ where
         }
     }
 
-    pub fn scan_tokens(mut self) -> Vec<Rc<Token>> {
+    pub fn scan_tokens(mut self) -> Vec<Gc<Token>> {
         while !self.is_at_end() {
             self.start = self.current;
             self.scan_token();
@@ -129,8 +128,9 @@ where
             self.advance();
         }
         let text = &self.source[self.start..self.current];
-        let type_ = *KEYWORDS.get(text).unwrap_or(&TT::Identifier);
-        self.add_token(type_);
+        let ident = TT::Identifier;
+        let type_ = KEYWORDS.get(text).unwrap_or(&ident);
+        self.add_token(type_.clone());
     }
 
     fn number(&mut self) {

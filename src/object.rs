@@ -1,12 +1,13 @@
-use std::fmt;
-use std::rc::Rc;
-
 use crate::lox_callable::LoxCallable;
 
-#[derive(Clone, Debug)]
+use std::fmt;
+
+use gc::{Finalize, Gc, Trace};
+
+#[derive(Clone, Debug, Finalize, Trace)]
 pub enum Object {
     Boolean(bool),
-    Callable(Rc<dyn LoxCallable>),
+    Callable(Gc<LoxCallable>),
     Nil,
     Number(f64),
     String(String),

@@ -1,6 +1,8 @@
 use std::fmt;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+use gc::{Finalize, Trace};
+
+#[derive(Clone, Debug, Finalize, Trace, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,

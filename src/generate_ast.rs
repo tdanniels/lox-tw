@@ -6,11 +6,11 @@
 /// - An impl for `S` with `new` and `make methods. The `new` method takes the
 ///   list of `ident: type` pairs as parameters and returns the raw struct.
 ///   The `make` convenience method takes the same parameters and returns
-///   an Expr(Rc<S>).
+///   an Expr(Gc<S>).
 #[macro_export]
 macro_rules! ast_struct {
     ($enum_name: ident, $struct_name: ident, $($field: ident, $type: ty),*) => {
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Finalize, Trace)]
         pub struct $struct_name {
             $(
                 pub $field: $type,
@@ -23,7 +23,7 @@ macro_rules! ast_struct {
             }
 
             pub fn make($($field: $type,)*) -> $enum_name {
-                $enum_name::$struct_name(Rc::new($struct_name::new($($field,)*)))
+                $enum_name::$struct_name(Gc::new($struct_name::new($($field,)*)))
             }
         }
     };
@@ -32,10 +32,10 @@ macro_rules! ast_struct {
 #[macro_export]
 macro_rules! ast_enum {
     ($enum_name: ident, $($item: ident),*) => {
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Finalize, Trace)]
         pub enum $enum_name {
             $(
-                $item(Rc<$item>),
+                $item(Gc<$item>),
             )*
         }
     };

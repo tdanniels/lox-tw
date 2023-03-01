@@ -1,4 +1,4 @@
-use crate::interpreter::Interpreter;
+use crate::interpreter::{Interpreter, InterpreterOutput};
 use crate::lox_result::Result;
 use crate::parser::Parser;
 use crate::runtime_error::RuntimeError;
@@ -10,7 +10,6 @@ use std::cell::RefCell;
 use std::fs;
 use std::io::{self, Write};
 use std::process;
-use std::rc::Rc;
 
 pub struct Lox {
     had_error: RefCell<bool>,
@@ -23,7 +22,7 @@ impl Lox {
         Self {
             had_error: false.into(),
             had_runtime_error: false.into(),
-            interpreter: Interpreter::new(Rc::new(RefCell::new(std::io::stdout()))).into(),
+            interpreter: Interpreter::new(InterpreterOutput::StdOut).into(),
         }
     }
 
