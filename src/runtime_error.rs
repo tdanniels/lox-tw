@@ -5,7 +5,7 @@ use std::fmt::{self, Display};
 
 use gc::Gc;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RuntimeError {
     pub token: Gc<Token>,
     pub message: String,

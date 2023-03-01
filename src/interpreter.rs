@@ -371,25 +371,34 @@ mod test {
 
     use gc::{Gc, GcCell};
 
-    fn positive_interpreter_test(source: &str, expected_output: &str) -> Result<()> {
-        let error_count = GcCell::new(0usize);
+    fn interpreter_test(
+        source: &str,
+        expected_output: &str,
+        expected_error_count: usize,
+        expected_error_message: Option<&str>,
+    ) -> Result<()> {
+        let mut error_count = 0usize;
+        let mut error = None;
 
-        let tokens =
-            Scanner::new(source, |_, _| *error_count.borrow_mut() += 1).scan_tokens();
+        let tokens = Scanner::new(source, |_, _| error_count += 1).scan_tokens();
 
         let statements = Parser::new(tokens, |_, _| {
-            *error_count.borrow_mut() += 1;
+            error_count += 1;
         })
         .parse()
         .unwrap();
 
-        assert_eq!(*error_count.borrow(), 0);
+        // Interpreter tests should always parse.
+        assert_eq!(error_count, 0);
 
         let output = Gc::new(GcCell::new(Vec::new()));
         let mut interpreter = Interpreter::new(InterpreterOutput::ByteVec(output.clone()));
-        interpreter.interpret(&statements, |_| *error_count.borrow_mut() += 1);
+        interpreter.interpret(&statements, |err| {
+            error_count += 1;
+            error = Some(err.clone());
+        });
 
-        assert_eq!(*error_count.borrow(), 0);
+        assert_eq!(error_count, expected_error_count);
 
         // First compare the stringified output/expected output in order to
         // get an error message in terms of strings if they don't match.
@@ -398,6 +407,10 @@ mod test {
         // This should always pass if the above assertion passed, but let's
         // be thorough.
         assert_eq!(*output.borrow(), expected_output.as_bytes());
+
+        if let Some(expected_error_output) = expected_error_message {
+            assert_eq!(&error.unwrap().message, expected_error_output);
+        }
 
         Ok(())
     }
@@ -458,7 +471,7 @@ mod test {
             print a;
         ";
         let expected_output = "3\n5\n7\n5\n3\n1\n1\n";
-        positive_interpreter_test(source, expected_output)
+        interpreter_test(source, expected_output, 0, None)
     }
 
     #[test]
@@ -468,7 +481,7 @@ mod test {
             if (false) print "foo"; else print "bar";
         "#;
         let expected_output = "foo\nbar\n";
-        positive_interpreter_test(source, expected_output)
+        interpreter_test(source, expected_output, 0, None)
     }
 
     #[test]
@@ -480,7 +493,7 @@ mod test {
             var d = true and "d"; print d;
         "#;
         let expected_output = "a\nb\nfalse\nd\n";
-        positive_interpreter_test(source, expected_output)
+        interpreter_test(source, expected_output, 0, None)
     }
 
     #[test]
@@ -494,7 +507,7 @@ mod test {
             for (var b = 1; a < 60; b = temp + b) { print a; temp = a; a = b; }
         ";
         let expected_output = "0\n1\n2\n3\n4\n0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n55\n";
-        positive_interpreter_test(source, expected_output)
+        interpreter_test(source, expected_output, 0, None)
     }
 
     #[test]
@@ -507,7 +520,7 @@ mod test {
             say_hi("Foo", "Bar");
         "#;
         let expected_output = "Hi, Foo Bar!\n";
-        positive_interpreter_test(source, expected_output)
+        interpreter_test(source, expected_output, 0, None)
     }
 
     #[test]
@@ -523,7 +536,7 @@ mod test {
             }
         ";
         let expected_output = "0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n";
-        positive_interpreter_test(source, expected_output)
+        interpreter_test(source, expected_output, 0, None)
     }
 
     #[test]
@@ -544,6 +557,17 @@ mod test {
             counter();
         ";
         let expected_output = "1\n2\n3\n";
-        positive_interpreter_test(source, expected_output)
+        interpreter_test(source, expected_output, 0, None)
+    }
+
+    #[test]
+    fn undefined_variable_in_fun() -> Result<()> {
+        let source = r"
+            fun foo() { a = 1; }
+            foo();
+        ";
+        let expected_output = "";
+        let expected_error_message = Some("Undefined variable a.");
+        interpreter_test(source, expected_output, 1, expected_error_message)
     }
 }
