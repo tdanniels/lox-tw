@@ -1,5 +1,6 @@
 use crate::expr::Expr;
 use crate::token::Token;
+use crate::unique_id::unique_usize;
 
 use gc::{Finalize, Gc, Trace};
 

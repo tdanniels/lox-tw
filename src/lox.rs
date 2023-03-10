@@ -1,6 +1,7 @@
 use crate::interpreter::{Interpreter, InterpreterOutput};
 use crate::lox_result::Result;
 use crate::parser::Parser;
+use crate::resolver::Resolver;
 use crate::runtime_error::RuntimeError;
 use crate::scanner::Scanner;
 use crate::token::Token;
@@ -65,6 +66,16 @@ impl Lox {
         let statements = Parser::new(tokens, |t, m| self.token_error(&t, m))
             .parse()
             .expect("Unexpected parse error.");
+
+        if *self.had_error.borrow() {
+            return;
+        }
+
+        Resolver::new(&mut self.interpreter.borrow_mut(), |t, m| {
+            self.token_error(&t, m)
+        })
+        .resolve(&statements)
+        .expect("Unexpected variable resolution error.");
 
         if *self.had_error.borrow() {
             return;

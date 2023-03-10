@@ -4,26 +4,26 @@ use crate::lox_result::Result;
 use crate::lox_return::Return;
 use crate::object::Object;
 use crate::stmt;
-use crate::unique_id::unique_id;
+use crate::unique_id::unique_u128;
 
 use std::fmt;
 use std::iter::zip;
 
-use gc::{Finalize, Gc, GcCell, Trace};
+use gc::{Finalize, Gc, Trace};
 
 #[derive(Clone, Debug, Finalize, Trace)]
 pub struct LoxFunction {
-    closure: Gc<GcCell<Environment>>,
+    closure: Environment,
     declaration: Gc<stmt::Function>,
     id: u128,
 }
 
 impl LoxFunction {
-    pub fn new(declaration: Gc<stmt::Function>, closure: Gc<GcCell<Environment>>) -> Self {
+    pub fn new(declaration: Gc<stmt::Function>, closure: Environment) -> Self {
         Self {
             closure,
             declaration,
-            id: unique_id(),
+            id: unique_u128(),
         }
     }
 
@@ -36,14 +36,12 @@ impl LoxFunction {
         interpreter: &mut Interpreter,
         arguments: &[Gc<Object>],
     ) -> Result<Gc<Object>> {
-        let mut environment = Environment::new(Some(self.closure.clone()));
+        let environment = Environment::new(Some(self.closure.clone()));
         for (param, arg) in zip(self.declaration.params.iter(), arguments.iter()) {
             environment.define(&param.lexeme, arg.clone());
         }
 
-        if let Err(err) = interpreter
-            .execute_block(&self.declaration.body, Gc::new(GcCell::new(environment)))
-        {
+        if let Err(err) = interpreter.execute_block(&self.declaration.body, environment) {
             if let Some(return_value) = err.downcast_ref::<Return>() {
                 return Ok(return_value.value.clone());
             } else {

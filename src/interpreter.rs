@@ -13,6 +13,7 @@ use crate::stmt::{self, Stmt};
 use crate::token::Token;
 use crate::token_type::TokenType as TT;
 
+use std::collections::HashMap;
 use std::io::Write;
 
 use gc::{Finalize, Gc, GcCell, Trace};
@@ -24,25 +25,26 @@ pub enum InterpreterOutput {
     ByteVec(Gc<GcCell<Vec<u8>>>),
 }
 
-#[derive(Finalize, Trace)]
 pub struct Interpreter {
-    pub globals: Gc<GcCell<Environment>>,
-    environment: Gc<GcCell<Environment>>,
+    globals: Environment,
+    locals: HashMap<usize, usize>,
+    environment: Environment,
     output: InterpreterOutput,
 }
 
 impl Interpreter {
     pub fn new(output: InterpreterOutput) -> Self {
-        let globals = Gc::new(GcCell::new(Environment::new(None)));
+        let globals = Environment::new(None);
 
-        globals.borrow_mut().define(
+        globals.define(
             "clock",
             Gc::new(OCallable(Gc::new(LoxCallable::Clock(Clock::new())))),
         );
 
         Self {
-            globals: Gc::clone(&globals),
-            environment: Gc::clone(&globals),
+            globals: globals.clone(),
+            locals: HashMap::new(),
+            environment: globals,
             output,
         }
     }
@@ -73,18 +75,22 @@ impl Interpreter {
             Stmt::Function(s) => self.visit_function_stmt(s.clone()),
             Stmt::If(s) => self.visit_if_stmt(s.clone()),
             Stmt::Print(s) => self.visit_print_stmt(s.clone()),
-            Stmt::Return(s) => self.visit_return_statement(s.clone()),
+            Stmt::Return(s) => self.visit_return_stmt(s.clone()),
             Stmt::Var(s) => self.visit_var_stmt(s.clone()),
-            Stmt::While(s) => self.visit_while_statement(s.clone()),
+            Stmt::While(s) => self.visit_while_stmt(s.clone()),
         }
+    }
+
+    pub fn resolve(&mut self, expr_id: usize, depth: usize) {
+        self.locals.insert(expr_id, depth);
     }
 
     pub fn execute_block(
         &mut self,
         statements: &[Stmt],
-        environment: Gc<GcCell<Environment>>,
+        environment: Environment,
     ) -> Result<()> {
-        let previous = Gc::clone(&self.environment);
+        let previous = self.environment.clone();
         self.environment = environment;
 
         for statement in statements {
@@ -102,9 +108,7 @@ impl Interpreter {
     fn visit_block_stmt(&mut self, stmt: Gc<stmt::Block>) -> Result<()> {
         self.execute_block(
             &stmt.statements,
-            Gc::new(GcCell::new(Environment::new(Some(Gc::clone(
-                &self.environment,
-            ))))),
+            Environment::new(Some(self.environment.clone())),
         )?;
         Ok(())
     }
@@ -133,7 +137,6 @@ impl Interpreter {
             self.environment.clone(),
         )));
         self.environment
-            .borrow_mut()
             .define(&stmt.name.lexeme, Gc::new(OCallable(function)));
         Ok(())
     }
@@ -156,7 +159,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_return_statement(&mut self, stmt: Gc<stmt::Return>) -> Result<()> {
+    fn visit_return_stmt(&mut self, stmt: Gc<stmt::Return>) -> Result<()> {
         let value = match &stmt.value {
             Some(expr) => self.evaluate(expr.clone())?,
             None => Gc::new(ONil),
@@ -172,13 +175,11 @@ impl Interpreter {
             Gc::new(ONil)
         };
 
-        self.environment
-            .borrow_mut()
-            .define(&stmt.name.lexeme, value);
+        self.environment.define(&stmt.name.lexeme, value);
         Ok(())
     }
 
-    fn visit_while_statement(&mut self, stmt: Gc<stmt::While>) -> Result<()> {
+    fn visit_while_stmt(&mut self, stmt: Gc<stmt::While>) -> Result<()> {
         while is_truthy(&*self.evaluate(stmt.condition.clone())?) {
             self.execute(stmt.body.clone())?;
         }
@@ -187,9 +188,14 @@ impl Interpreter {
 
     fn visit_assign_expr(&mut self, expr: Gc<expr::Assign>) -> Result<Gc<Object>> {
         let value = self.evaluate(expr.value.clone())?;
-        self.environment
-            .borrow_mut()
-            .assign(&expr.name, Gc::clone(&value))?;
+
+        if let Some(distance) = self.locals.get(&expr.id()) {
+            self.environment
+                .assign_at(*distance, &expr.name, Gc::clone(&value));
+        } else {
+            self.globals.assign(&expr.name, Gc::clone(&value))?;
+        }
+
         Ok(value)
     }
 
@@ -320,7 +326,15 @@ impl Interpreter {
     }
 
     fn visit_variable_expr(&mut self, expr: Gc<expr::Variable>) -> Result<Gc<Object>> {
-        self.environment.borrow().get(&expr.name)
+        self.look_up_variable(&expr.name, expr.id())
+    }
+
+    fn look_up_variable(&self, name: &Token, expr_id: usize) -> Result<Gc<Object>> {
+        if let Some(distance) = self.locals.get(&expr_id) {
+            Ok(self.environment.get_at(*distance, &name.lexeme))
+        } else {
+            self.globals.get(name)
+        }
     }
 }
 
@@ -365,6 +379,7 @@ fn is_equal(a: &Object, b: &Object) -> bool {
 mod test {
     use super::*;
     use crate::parser::Parser;
+    use crate::resolver::Resolver;
     use crate::scanner::Scanner;
 
     use std::str;
@@ -393,6 +408,16 @@ mod test {
 
         let output = Gc::new(GcCell::new(Vec::new()));
         let mut interpreter = Interpreter::new(InterpreterOutput::ByteVec(output.clone()));
+
+        Resolver::new(&mut interpreter, |_, _| {
+            error_count += 1;
+        })
+        .resolve(&statements)
+        .unwrap();
+
+        // Interpreter tests should always resolve.
+        assert_eq!(error_count, 0);
+
         interpreter.interpret(&statements, |err| {
             error_count += 1;
             error = Some(err.clone());
@@ -443,6 +468,12 @@ mod test {
         assert_eq!(*error_count.borrow(), 0);
 
         let mut interpreter = Interpreter::new(InterpreterOutput::StdOut);
+
+        Resolver::new(&mut interpreter, |_, _| {
+            *error_count.borrow_mut() += 1;
+        })
+        .resolve(&statements)
+        .unwrap();
 
         if let Stmt::Expression(expr_statement) = &statements[0] {
             let res = interpreter.evaluate(expr_statement.expression.clone())?;
@@ -569,5 +600,23 @@ mod test {
         let expected_output = "";
         let expected_error_message = Some("Undefined variable a.");
         interpreter_test(source, expected_output, 1, expected_error_message)
+    }
+
+    #[test]
+    fn static_scope() -> Result<()> {
+        let source = r#"
+            var a = "global";
+            {
+                fun show_a() {
+                    print a;
+                }
+
+                show_a();
+                var a = "block";
+                show_a();
+            }
+        "#;
+        let expected_output = "global\nglobal\n";
+        interpreter_test(source, expected_output, 0, None)
     }
 }

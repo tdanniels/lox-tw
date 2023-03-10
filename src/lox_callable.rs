@@ -2,7 +2,7 @@ use crate::interpreter::Interpreter;
 use crate::lox_function::LoxFunction;
 use crate::lox_result::Result;
 use crate::object::Object;
-use crate::unique_id::unique_id;
+use crate::unique_id::unique_u128;
 
 use std::fmt::{self, Debug, Display};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -64,7 +64,7 @@ pub struct Clock {
 
 impl Clock {
     pub fn new() -> Self {
-        Self { id: unique_id() }
+        Self { id: unique_u128() }
     }
 
     fn arity(&self) -> usize {

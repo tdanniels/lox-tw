@@ -1,5 +1,6 @@
 use crate::object::Object;
 use crate::token::Token;
+use crate::unique_id::unique_usize;
 
 use gc::{Finalize, Gc, Trace};
 

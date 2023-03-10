@@ -10,6 +10,7 @@ mod lox_return;
 mod object;
 mod parser;
 mod pretty_printer;
+mod resolver;
 mod runtime_error;
 mod scanner;
 mod stmt;

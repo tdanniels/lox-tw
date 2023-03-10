@@ -15,15 +15,21 @@ macro_rules! ast_struct {
             $(
                 pub $field: $type,
             )*
+            id_: usize
         }
 
         impl $struct_name {
             pub fn new($($field: $type,)*) -> Self {
-                Self { $($field,)* }
+                Self { $($field,)* id_: unique_usize() }
             }
 
             pub fn make($($field: $type,)*) -> $enum_name {
                 $enum_name::$struct_name(Gc::new($struct_name::new($($field,)*)))
+            }
+
+            #[allow(unused)]
+            pub fn id(&self) -> usize {
+                self.id_
             }
         }
     };
