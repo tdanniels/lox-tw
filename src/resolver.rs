@@ -45,6 +45,12 @@ where
         Ok(())
     }
 
+    fn visit_class_stmt(&mut self, stmt: &'a stmt::Class) -> Result<()> {
+        self.declare(&stmt.name);
+        self.define(&stmt.name);
+        Ok(())
+    }
+
     fn visit_expression_stmt(&mut self, stmt: &stmt::Expression) -> Result<()> {
         self.resolve_expr(&stmt.expression)?;
         Ok(())
@@ -175,6 +181,7 @@ where
     fn resolve_stmt(&mut self, statement: &'a stmt::Stmt) -> Result<()> {
         match statement {
             Stmt::Block(s) => self.visit_block_stmt(s),
+            Stmt::Class(s) => self.visit_class_stmt(s),
             Stmt::Expression(s) => self.visit_expression_stmt(s),
             Stmt::Function(s) => self.visit_function_stmt(s),
             Stmt::If(s) => self.visit_if_stmt(s),

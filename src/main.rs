@@ -4,6 +4,7 @@ mod generate_ast;
 mod interpreter;
 mod lox;
 mod lox_callable;
+mod lox_class;
 mod lox_function;
 mod lox_result;
 mod lox_return;

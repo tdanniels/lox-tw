@@ -60,8 +60,11 @@ where
     fn declaration(&self) -> Option<Result<Stmt>> {
         let stmt_result = if self.match_(&[TT::Var]) {
             self.var_declaration()
+        } else if self.match_(&[TT::Class]) {
+            self.class_declaration()
         } else if self.match_(&[TT::Fun]) {
             self.function("function")
+                .map(|f| Stmt::Function(Gc::new(f)))
         } else {
             self.statement()
         };
@@ -77,6 +80,20 @@ where
             }
             Ok(res) => Some(Ok(res)),
         }
+    }
+
+    fn class_declaration(&self) -> Result<Stmt> {
+        let name = self.consume(TT::Identifier, "Expect class name.")?;
+        self.consume(TT::LeftBrace, "Expect '{' before class body.")?;
+
+        let mut methods = Vec::new();
+        while !self.check(TT::RightBrace) && !self.is_at_end() {
+            methods.push(Gc::new(self.function("method")?));
+        }
+
+        self.consume(TT::RightBrace, "Expect '}' after class body.")?;
+
+        Ok(stmt::Class::make(name, methods))
     }
 
     fn statement(&self) -> Result<Stmt> {
@@ -207,7 +224,7 @@ where
         Ok(stmt::Expression::make(expr))
     }
 
-    fn function(&self, kind: &str) -> Result<Stmt> {
+    fn function(&self, kind: &str) -> Result<stmt::Function> {
         let name = self.consume(TT::Identifier, &format!("Expect {kind} name."))?;
         self.consume(TT::LeftParen, &format!("Expect '(' after {kind} name."))?;
         let mut parameters = Vec::new();
@@ -228,7 +245,7 @@ where
 
         self.consume(TT::LeftBrace, &format!("Expect '{{' before {kind} body."))?;
         let body = self.block()?;
-        Ok(stmt::Function::make(name, parameters, body))
+        Ok(stmt::Function::new(name, parameters, body))
     }
 
     fn block(&self) -> Result<Vec<Stmt>> {

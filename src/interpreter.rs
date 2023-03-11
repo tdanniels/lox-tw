@@ -1,12 +1,13 @@
 use crate::environment::Environment;
 use crate::expr::{self, Expr};
 use crate::lox_callable::{Clock, LoxCallable};
+use crate::lox_class::LoxClass;
 use crate::lox_function::LoxFunction;
 use crate::lox_result::Result;
 use crate::lox_return::Return;
 use crate::object::Object::{
-    self, Boolean as OBoolean, Callable as OCallable, Nil as ONil, Number as ONumber,
-    String as OString,
+    self, Boolean as OBoolean, Callable as OCallable, Class as OClass, Nil as ONil,
+    Number as ONumber, String as OString,
 };
 use crate::runtime_error::RuntimeError;
 use crate::stmt::{self, Stmt};
@@ -71,6 +72,7 @@ impl Interpreter {
     fn execute(&mut self, stmt: Stmt) -> Result<()> {
         match &stmt {
             Stmt::Block(s) => self.visit_block_stmt(s.clone()),
+            Stmt::Class(s) => self.visit_class_stmt(s.clone()),
             Stmt::Expression(s) => self.visit_expression_stmt(s.clone()),
             Stmt::Function(s) => self.visit_function_stmt(s.clone()),
             Stmt::If(s) => self.visit_if_stmt(s.clone()),
@@ -110,6 +112,14 @@ impl Interpreter {
             &stmt.statements,
             Environment::new(Some(self.environment.clone())),
         )?;
+        Ok(())
+    }
+
+    fn visit_class_stmt(&mut self, stmt: Gc<stmt::Class>) -> Result<()> {
+        self.environment.define(&stmt.name.lexeme, ONil.into());
+        let class = LoxClass::new(&stmt.name.lexeme);
+        self.environment
+            .assign(&stmt.name, OClass(class.into()).into())?;
         Ok(())
     }
 

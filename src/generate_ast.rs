@@ -23,6 +23,7 @@ macro_rules! ast_struct {
                 Self { $($field,)* id_: unique_usize() }
             }
 
+            #[allow(unused)]
             pub fn make($($field: $type,)*) -> $enum_name {
                 $enum_name::$struct_name(Gc::new($struct_name::new($($field,)*)))
             }

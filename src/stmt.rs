@@ -5,6 +5,7 @@ use crate::unique_id::unique_usize;
 use gc::{Finalize, Gc, Trace};
 
 crate::ast_struct!(Stmt, Block, statements, Vec<Stmt>);
+crate::ast_struct!(Stmt, Class, name, Gc<Token>, methods, Vec<Gc<Function>>);
 crate::ast_struct!(Stmt, Expression, expression, Expr);
 crate::ast_struct!(
     Stmt,
@@ -31,4 +32,4 @@ crate::ast_struct!(Stmt, Return, keyword, Gc<Token>, value, Option<Expr>);
 crate::ast_struct!(Stmt, Var, name, Gc<Token>, initializer, Option<Expr>);
 crate::ast_struct!(Stmt, While, condition, Expr, body, Stmt);
 
-crate::ast_enum!(Stmt, Block, Expression, Function, If, Print, Return, Var, While);
+crate::ast_enum!(Stmt, Block, Class, Expression, Function, If, Print, Return, Var, While);
