@@ -1,5 +1,6 @@
 use crate::lox_callable::LoxCallable;
 use crate::lox_class::LoxClass;
+use crate::lox_instance::LoxInstance;
 
 use std::fmt;
 
@@ -9,7 +10,8 @@ use gc::{Finalize, Gc, Trace};
 pub enum Object {
     Boolean(bool),
     Callable(Gc<LoxCallable>),
-    Class(Gc<LoxClass>),
+    Class(LoxClass),
+    Instance(LoxInstance),
     Nil,
     Number(f64),
     String(String),
@@ -21,6 +23,7 @@ impl fmt::Display for Object {
             Object::Boolean(x) => write!(f, "{x}"),
             Object::Callable(x) => write!(f, "{x}"),
             Object::Class(x) => write!(f, "{x}"),
+            Object::Instance(x) => write!(f, "{x}"),
             Object::Nil => write!(f, "nil"),
             Object::Number(x) => write!(f, "{x}"),
             Object::String(x) => write!(f, "{x}"),
@@ -36,6 +39,7 @@ impl PartialEq for Object {
             (Object::Boolean(a), Object::Boolean(b)) => a == b,
             (Object::Callable(a), Object::Callable(b)) => a == b,
             (Object::Class(a), Object::Class(b)) => a == b,
+            (Object::Instance(a), Object::Instance(b)) => a == b,
             (Object::Nil, Object::Nil) => true,
             (Object::Number(a), Object::Number(b)) => a == b,
             (Object::String(a), Object::String(b)) => a == b,

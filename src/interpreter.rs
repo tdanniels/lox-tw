@@ -118,8 +118,7 @@ impl Interpreter {
     fn visit_class_stmt(&mut self, stmt: Gc<stmt::Class>) -> Result<()> {
         self.environment.define(&stmt.name.lexeme, ONil.into());
         let class = LoxClass::new(&stmt.name.lexeme);
-        self.environment
-            .assign(&stmt.name, OClass(class.into()).into())?;
+        self.environment.assign(&stmt.name, OClass(class).into())?;
         Ok(())
     }
 
@@ -261,7 +260,17 @@ impl Interpreter {
     }
 
     fn visit_call_expr(&mut self, expr: Gc<expr::Call>) -> Result<Gc<Object>> {
-        let callee = self.evaluate(expr.callee.clone())?;
+        let callee = {
+            let callee = self.evaluate(expr.callee.clone())?;
+
+            if let OClass(class) = &*callee {
+                // TODO: it would be nice to drop this special case. This probably requires
+                // converting LoxCallable into a trait.
+                OCallable(LoxCallable::Class(class.clone()).into()).into()
+            } else {
+                callee
+            }
+        };
 
         let arguments = {
             let mut arguments = Vec::new();

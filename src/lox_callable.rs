@@ -1,4 +1,5 @@
 use crate::interpreter::Interpreter;
+use crate::lox_class::LoxClass;
 use crate::lox_function::LoxFunction;
 use crate::lox_result::Result;
 use crate::object::Object;
@@ -11,6 +12,7 @@ use gc::{Finalize, Gc, Trace};
 
 #[derive(Clone, Debug, Finalize, Trace)]
 pub enum LoxCallable {
+    Class(LoxClass),
     Clock(Clock),
     Function(LoxFunction),
 }
@@ -18,6 +20,7 @@ pub enum LoxCallable {
 impl LoxCallable {
     pub fn arity(&self) -> usize {
         match self {
+            LoxCallable::Class(c) => c.arity(),
             LoxCallable::Clock(c) => c.arity(),
             LoxCallable::Function(c) => c.arity(),
         }
@@ -29,6 +32,7 @@ impl LoxCallable {
         arguments: &[Gc<Object>],
     ) -> Result<Gc<Object>> {
         match self {
+            LoxCallable::Class(c) => c.call(interpreter, arguments),
             LoxCallable::Clock(c) => c.call(interpreter, arguments),
             LoxCallable::Function(c) => c.call(interpreter, arguments),
         }
@@ -36,6 +40,7 @@ impl LoxCallable {
 
     pub fn id(&self) -> u128 {
         match self {
+            LoxCallable::Class(c) => c.id(),
             LoxCallable::Clock(c) => c.id(),
             LoxCallable::Function(c) => c.id(),
         }
@@ -45,6 +50,7 @@ impl LoxCallable {
 impl Display for LoxCallable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            LoxCallable::Class(c) => Display::fmt(c, f),
             LoxCallable::Clock(c) => Display::fmt(c, f),
             LoxCallable::Function(c) => Display::fmt(c, f),
         }

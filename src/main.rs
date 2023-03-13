@@ -6,6 +6,7 @@ mod lox;
 mod lox_callable;
 mod lox_class;
 mod lox_function;
+mod lox_instance;
 mod lox_result;
 mod lox_return;
 mod object;
