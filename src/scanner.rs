@@ -37,11 +37,11 @@ where
 }
 
 fn is_digit(c: u8) -> bool {
-    (b'0'..=b'9').contains(&c)
+    c.is_ascii_digit()
 }
 
 fn is_alpha(c: u8) -> bool {
-    (b'a'..=b'z').contains(&c) || (b'A'..=b'Z').contains(&c) || c == b'_'
+    c.is_ascii_lowercase() || c.is_ascii_uppercase() || c == b'_'
 }
 
 fn is_alpha_numeric(c: u8) -> bool {
