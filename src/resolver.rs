@@ -131,6 +131,11 @@ where
         Ok(())
     }
 
+    fn visit_get_expr(&mut self, expr: &expr::Get) -> Result<()> {
+        self.resolve_expr(&expr.object)?;
+        Ok(())
+    }
+
     fn visit_grouping_expr(&mut self, expr: &expr::Grouping) -> Result<()> {
         self.resolve_expr(&expr.expression)?;
         Ok(())
@@ -143,6 +148,12 @@ where
     fn visit_logical_expr(&mut self, expr: &expr::Logical) -> Result<()> {
         self.resolve_expr(&expr.left)?;
         self.resolve_expr(&expr.right)?;
+        Ok(())
+    }
+
+    fn visit_set_expr(&mut self, expr: &expr::Set) -> Result<()> {
+        self.resolve_expr(&expr.value)?;
+        self.resolve_expr(&expr.object)?;
         Ok(())
     }
 
@@ -197,9 +208,11 @@ where
             Expr::Assign(ex) => self.visit_assign_expr(ex),
             Expr::Binary(ex) => self.visit_binary_expr(ex),
             Expr::Call(ex) => self.visit_call_expr(ex),
+            Expr::Get(ex) => self.visit_get_expr(ex),
             Expr::Grouping(ex) => self.visit_grouping_expr(ex),
             Expr::Literal(ex) => self.visit_literal_expr(ex),
             Expr::Logical(ex) => self.visit_logical_expr(ex),
+            Expr::Set(ex) => self.visit_set_expr(ex),
             Expr::Unary(ex) => self.visit_unary_expr(ex),
             Expr::Variable(ex) => self.visit_variable_expr(ex),
         }

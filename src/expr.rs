@@ -16,10 +16,14 @@ crate::ast_struct!(
     arguments,
     Vec<Expr>
 );
+crate::ast_struct!(Expr, Get, object, Expr, name, Gc<Token>);
 crate::ast_struct!(Expr, Grouping, expression, Expr);
 crate::ast_struct!(Expr, Literal, value, Gc<Object>);
 crate::ast_struct!(Expr, Logical, left, Expr, operator, Gc<Token>, right, Expr);
+crate::ast_struct!(Expr, Set, object, Expr, name, Gc<Token>, value, Expr);
 crate::ast_struct!(Expr, Unary, operator, Gc<Token>, right, Expr);
 crate::ast_struct!(Expr, Variable, name, Gc<Token>);
 
-crate::ast_enum!(Expr, Assign, Binary, Call, Grouping, Literal, Logical, Unary, Variable);
+crate::ast_enum!(
+    Expr, Assign, Binary, Call, Get, Grouping, Literal, Logical, Set, Unary, Variable
+);

@@ -271,6 +271,8 @@ where
             if let Expr::Variable(var) = &expr {
                 let name = var.name.clone();
                 return Ok(expr::Assign::make(name, value));
+            } else if let Expr::Get(get) = &expr {
+                return Ok(expr::Set::make(get.object.clone(), get.name.clone(), value));
             }
 
             self.error(&equals, "Invalid assignment target.");
@@ -388,6 +390,9 @@ where
         loop {
             if self.match_(&[TT::LeftParen]) {
                 expr = self.finish_call(expr)?;
+            } else if self.match_(&[TT::Dot]) {
+                let name = self.consume(TT::Identifier, "Expect property name after '.'")?;
+                expr = expr::Get::make(expr, name);
             } else {
                 break;
             }

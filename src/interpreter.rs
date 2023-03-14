@@ -6,8 +6,8 @@ use crate::lox_function::LoxFunction;
 use crate::lox_result::Result;
 use crate::lox_return::Return;
 use crate::object::Object::{
-    self, Boolean as OBoolean, Callable as OCallable, Class as OClass, Nil as ONil,
-    Number as ONumber, String as OString,
+    self, Boolean as OBoolean, Callable as OCallable, Class as OClass,
+    Instance as OInstance, Nil as ONil, Number as ONumber, String as OString,
 };
 use crate::runtime_error::RuntimeError;
 use crate::stmt::{self, Stmt};
@@ -127,9 +127,11 @@ impl Interpreter {
             Expr::Assign(ex) => self.visit_assign_expr(ex.clone()),
             Expr::Binary(ex) => self.visit_binary_expr(ex.clone()),
             Expr::Call(ex) => self.visit_call_expr(ex.clone()),
+            Expr::Get(ex) => self.visit_get_expr(ex.clone()),
             Expr::Grouping(ex) => self.visit_grouping_expr(ex.clone()),
             Expr::Literal(ex) => self.visit_literal_expr(ex.clone()),
             Expr::Logical(ex) => self.visit_logical_expr(ex.clone()),
+            Expr::Set(ex) => self.visit_set_expr(ex.clone()),
             Expr::Unary(ex) => self.visit_unary_expr(ex.clone()),
             Expr::Variable(ex) => self.visit_variable_expr(ex.clone()),
         }
@@ -303,6 +305,14 @@ impl Interpreter {
         }
     }
 
+    fn visit_get_expr(&mut self, expr: Gc<expr::Get>) -> Result<Gc<Object>> {
+        let object = self.evaluate(expr.object.clone())?;
+        if let OInstance(instance) = &*object {
+            return instance.get(&expr.name);
+        }
+        Err(RuntimeError::new(expr.name.clone(), "Only instances have properties.").into())
+    }
+
     fn visit_grouping_expr(&mut self, expr: Gc<expr::Grouping>) -> Result<Gc<Object>> {
         self.evaluate(expr.expression.clone())
     }
@@ -329,6 +339,18 @@ impl Interpreter {
         }
 
         self.evaluate(expr.right.clone())
+    }
+
+    fn visit_set_expr(&mut self, expr: Gc<expr::Set>) -> Result<Gc<Object>> {
+        let object = self.evaluate(expr.object.clone())?;
+
+        if let OInstance(instance) = &*object {
+            let value = self.evaluate(expr.value.clone())?;
+            instance.set(&expr.name, value.clone());
+            Ok(value)
+        } else {
+            Err(RuntimeError::new(expr.name.clone(), "Only instances have fields.").into())
+        }
     }
 
     fn visit_unary_expr(&mut self, expr: Gc<expr::Unary>) -> Result<Gc<Object>> {

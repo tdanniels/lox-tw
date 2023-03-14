@@ -32,9 +32,15 @@ fn visit(expr: &Expr) -> String {
         Expr::Assign(ex) => parenthesize!(&ex.name.lexeme, &ex.value),
         Expr::Binary(ex) => parenthesize!(&ex.operator.lexeme, &ex.left, &ex.right),
         Expr::Call(ex) => parenthesize!("call", &ex.callee),
+        Expr::Get(ex) => parenthesize!(&("get ".to_string() + &ex.name.lexeme), &ex.object),
         Expr::Grouping(ex) => parenthesize!("group", &ex.expression),
         Expr::Literal(ex) => ex.value.to_string(),
         Expr::Logical(ex) => parenthesize!(&ex.operator.lexeme, &ex.left, &ex.right),
+        Expr::Set(ex) => parenthesize!(
+            &("set ".to_string() + &ex.name.lexeme),
+            &ex.object,
+            &ex.value
+        ),
         Expr::Unary(ex) => parenthesize!(&ex.operator.lexeme, &ex.right),
         Expr::Variable(ex) => ex.name.lexeme.to_string(),
     }
