@@ -13,6 +13,7 @@ use gc::Gc;
 enum FunctionType {
     None,
     Function,
+    Method,
 }
 
 pub struct Resolver<'a, F>
@@ -48,6 +49,12 @@ where
     fn visit_class_stmt(&mut self, stmt: &'a stmt::Class) -> Result<()> {
         self.declare(&stmt.name);
         self.define(&stmt.name);
+
+        for method in &stmt.methods {
+            let declaration = FunctionType::Method;
+            self.resolve_function(method, declaration)?;
+        }
+
         Ok(())
     }
 

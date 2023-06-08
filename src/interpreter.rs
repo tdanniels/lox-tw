@@ -117,7 +117,14 @@ impl Interpreter {
 
     fn visit_class_stmt(&mut self, stmt: Gc<stmt::Class>) -> Result<()> {
         self.environment.define(&stmt.name.lexeme, ONil.into());
-        let class = LoxClass::new(&stmt.name.lexeme);
+
+        let mut methods = HashMap::new();
+        for method in &stmt.methods {
+            let function = LoxFunction::new(method.clone(), self.environment.clone());
+            methods.insert(method.name.lexeme.clone(), function);
+        }
+
+        let class = LoxClass::new(&stmt.name.lexeme, methods);
         self.environment.assign(&stmt.name, OClass(class).into())?;
         Ok(())
     }
@@ -658,6 +665,21 @@ mod test {
             }
         "#;
         let expected_output = "global\nglobal\n";
+        interpreter_test(source, expected_output, 0, None)
+    }
+
+    #[test]
+    fn simple_method_call() -> Result<()> {
+        let source = r#"
+            class Printer {
+                print_twice(x) {
+                    print x;
+                    print x;
+                }
+            }
+            Printer().print_twice(54);
+        "#;
+        let expected_output = "54\n54\n";
         interpreter_test(source, expected_output, 0, None)
     }
 }

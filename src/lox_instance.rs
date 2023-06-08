@@ -1,3 +1,4 @@
+use crate::lox_callable::LoxCallable;
 use crate::lox_class::LoxClass;
 use crate::lox_result::Result;
 use crate::object::Object;
@@ -26,6 +27,11 @@ impl LoxInstance {
         if let Some(field) = self.fields.borrow().get(&name.lexeme) {
             return Ok(field.clone());
         }
+
+        if let Some(method) = self.class.find_method(&name.lexeme) {
+            return Ok(Object::Callable(LoxCallable::Function(method).into()).into());
+        }
+
         Err(RuntimeError::new(
             name.clone().into(),
             &format!("Undefined property {}.", &name.lexeme),
