@@ -16,6 +16,12 @@ enum FunctionType {
     Method,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum ClassType {
+    None,
+    Class,
+}
+
 pub struct Resolver<'a, F>
 where
     F: FnMut(Gc<Token>, &str),
@@ -23,6 +29,7 @@ where
     interpreter: &'a mut Interpreter,
     scopes: Vec<HashMap<&'a str, bool>>,
     current_function: FunctionType,
+    current_class: ClassType,
     error_handler: RefCell<F>,
 }
 
@@ -35,6 +42,7 @@ where
             interpreter,
             scopes: Vec::new(),
             current_function: FunctionType::None,
+            current_class: ClassType::None,
             error_handler: error_handler.into(),
         }
     }
@@ -47,13 +55,23 @@ where
     }
 
     fn visit_class_stmt(&mut self, stmt: &'a stmt::Class) -> Result<()> {
+        let enclosing_class = self.current_class;
+        self.current_class = ClassType::Class;
+
         self.declare(&stmt.name);
         self.define(&stmt.name);
+
+        self.begin_scope();
+        self.scopes.last_mut().unwrap().insert("this", true);
 
         for method in &stmt.methods {
             let declaration = FunctionType::Method;
             self.resolve_function(method, declaration)?;
         }
+
+        self.end_scope();
+
+        self.current_class = enclosing_class;
 
         Ok(())
     }
@@ -164,6 +182,19 @@ where
         Ok(())
     }
 
+    fn visit_this_expr(&mut self, expr: &expr::This) -> Result<()> {
+        if let ClassType::None = self.current_class {
+            (self.error_handler.borrow_mut())(
+                expr.keyword.clone(),
+                "Can't use 'this' outside of a class.",
+            );
+            return Ok(());
+        }
+
+        self.resolve_local(expr.id(), &expr.keyword)?;
+        Ok(())
+    }
+
     fn visit_unary_expr(&mut self, expr: &expr::Unary) -> Result<()> {
         self.resolve_expr(&expr.right)?;
         Ok(())
@@ -220,6 +251,7 @@ where
             Expr::Literal(ex) => self.visit_literal_expr(ex),
             Expr::Logical(ex) => self.visit_logical_expr(ex),
             Expr::Set(ex) => self.visit_set_expr(ex),
+            Expr::This(ex) => self.visit_this_expr(ex),
             Expr::Unary(ex) => self.visit_unary_expr(ex),
             Expr::Variable(ex) => self.visit_variable_expr(ex),
         }
@@ -279,5 +311,63 @@ where
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use crate::interpreter::{Interpreter, InterpreterOutput};
+    use crate::parser::Parser;
+    use crate::scanner::Scanner;
+
+    use gc::GcCell;
+
+    fn resolver_test(
+        source: &str,
+        expected_error_count: usize,
+        expected_error_message: Option<&str>,
+    ) -> Result<()> {
+        let mut error_count = 0usize;
+        let mut error = None;
+
+        let tokens = Scanner::new(source, |_, _| error_count += 1).scan_tokens();
+
+        let statements = Parser::new(tokens, |_, _| {
+            error_count += 1;
+        })
+        .parse()
+        .unwrap();
+
+        // Resolver tests should always parse.
+        assert_eq!(error_count, 0);
+
+        let output = Gc::new(GcCell::new(Vec::new()));
+        let mut interpreter = Interpreter::new(InterpreterOutput::ByteVec(output));
+
+        Resolver::new(&mut interpreter, |_, err| {
+            error_count += 1;
+            error = Some(err.to_owned());
+        })
+        .resolve(&statements)
+        .unwrap();
+
+        assert_eq!(error_count, expected_error_count);
+
+        if let Some(expected_error_output) = expected_error_message {
+            assert_eq!(error.unwrap(), expected_error_output);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn this_outside_class() -> Result<()> {
+        let source = r"
+            print this;
+        ";
+        let expected_error_message = Some("Can't use 'this' outside of a class.");
+        resolver_test(source, 1, expected_error_message)
     }
 }

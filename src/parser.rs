@@ -416,6 +416,10 @@ where
             return Ok(expr::Literal::make(self.previous().literal.clone().into()));
         }
 
+        if self.match_(&[TT::This]) {
+            return Ok(expr::This::make(self.previous()));
+        }
+
         if self.match_(&[TT::Identifier]) {
             return Ok(expr::Variable::make(self.previous()));
         }

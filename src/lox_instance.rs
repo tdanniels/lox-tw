@@ -12,14 +12,14 @@ use gc::{Finalize, Gc, GcCell, Trace};
 #[derive(Clone, Debug, Finalize, PartialEq, Trace)]
 pub struct LoxInstance {
     class: LoxClass,
-    fields: GcCell<HashMap<String, Gc<Object>>>,
+    fields: Gc<GcCell<HashMap<String, Gc<Object>>>>,
 }
 
 impl LoxInstance {
     pub fn new(class: LoxClass) -> Self {
         Self {
             class,
-            fields: GcCell::new(HashMap::new()),
+            fields: GcCell::new(HashMap::new()).into(),
         }
     }
 
@@ -29,7 +29,10 @@ impl LoxInstance {
         }
 
         if let Some(method) = self.class.find_method(&name.lexeme) {
-            return Ok(Object::Callable(LoxCallable::Function(method).into()).into());
+            return Ok(Object::Callable(
+                LoxCallable::Function(method.bind(self.clone().into())).into(),
+            )
+            .into());
         }
 
         Err(RuntimeError::new(

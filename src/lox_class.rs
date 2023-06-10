@@ -31,7 +31,7 @@ impl LoxClass {
         _interpreter: &mut Interpreter,
         _arguments: &[Gc<Object>],
     ) -> Result<Gc<Object>> {
-        let instance = Object::Instance(LoxInstance::new(self.clone())).into();
+        let instance = Object::Instance(LoxInstance::new(self.clone()).into()).into();
         Ok(instance)
     }
 

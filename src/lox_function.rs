@@ -1,5 +1,6 @@
 use crate::environment::Environment;
 use crate::interpreter::Interpreter;
+use crate::lox_instance::LoxInstance;
 use crate::lox_result::Result;
 use crate::lox_return::Return;
 use crate::object::Object;
@@ -25,6 +26,12 @@ impl LoxFunction {
             declaration,
             id: unique_u128(),
         }
+    }
+
+    pub fn bind(&self, instance: Gc<LoxInstance>) -> LoxFunction {
+        let environment = Environment::new(Some(self.closure.clone()));
+        environment.define("this", Object::Instance(instance).into());
+        LoxFunction::new(self.declaration.clone(), environment)
     }
 
     pub fn arity(&self) -> usize {

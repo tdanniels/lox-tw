@@ -11,7 +11,7 @@ pub enum Object {
     Boolean(bool),
     Callable(Gc<LoxCallable>),
     Class(LoxClass),
-    Instance(LoxInstance),
+    Instance(Gc<LoxInstance>),
     Nil,
     Number(f64),
     String(String),

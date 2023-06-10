@@ -139,6 +139,7 @@ impl Interpreter {
             Expr::Literal(ex) => self.visit_literal_expr(ex.clone()),
             Expr::Logical(ex) => self.visit_logical_expr(ex.clone()),
             Expr::Set(ex) => self.visit_set_expr(ex.clone()),
+            Expr::This(ex) => self.visit_this_expr(ex.clone()),
             Expr::Unary(ex) => self.visit_unary_expr(ex.clone()),
             Expr::Variable(ex) => self.visit_variable_expr(ex.clone()),
         }
@@ -358,6 +359,10 @@ impl Interpreter {
         } else {
             Err(RuntimeError::new(expr.name.clone(), "Only instances have fields.").into())
         }
+    }
+
+    fn visit_this_expr(&self, expr: Gc<expr::This>) -> Result<Gc<Object>> {
+        self.look_up_variable(&expr.keyword, expr.id())
     }
 
     fn visit_unary_expr(&mut self, expr: Gc<expr::Unary>) -> Result<Gc<Object>> {
@@ -680,6 +685,36 @@ mod test {
             Printer().print_twice(54);
         "#;
         let expected_output = "54\n54\n";
+        interpreter_test(source, expected_output, 0, None)
+    }
+
+    #[test]
+    fn simple_this_usage() -> Result<()> {
+        let source = r#"
+            class ThisXPrinter {
+                print_this_x() {
+                    print this.x;
+                }
+            }
+
+            var p = ThisXPrinter();
+            p.x = "A";
+
+            p.print_this_x();
+
+            var p2 = p;
+            p2.x = "B";
+
+            p.print_this_x();
+            p2.print_this_x();
+
+            p.x = "C";
+
+            p.print_this_x();
+            p2.print_this_x();
+
+        "#;
+        let expected_output = "A\nB\nB\nC\nC\n";
         interpreter_test(source, expected_output, 0, None)
     }
 }
