@@ -26,13 +26,22 @@ impl LoxClass {
         self.0.arity()
     }
 
+    // We implement call here instead of in LoxClassInternal because we need
+    // self to be Gc-wrapped, since we clone it.
     pub fn call(
         &self,
-        _interpreter: &mut Interpreter,
-        _arguments: &[Gc<Object>],
+        interpreter: &mut Interpreter,
+        arguments: &[Gc<Object>],
     ) -> Result<Gc<Object>> {
-        let instance = Object::Instance(LoxInstance::new(self.clone()).into()).into();
-        Ok(instance)
+        let instance = Gc::new(LoxInstance::new(self.clone()));
+
+        if let Some(initializer) = self.find_method("init") {
+            initializer
+                .bind(instance.clone())
+                .call(interpreter, arguments)?;
+        }
+
+        Ok(Object::Instance(instance).into())
     }
 
     pub fn id(&self) -> u128 {
@@ -73,7 +82,11 @@ impl LoxClassInternal {
     }
 
     fn arity(&self) -> usize {
-        0
+        if let Some(initializer) = self.find_method("init") {
+            initializer.arity()
+        } else {
+            0
+        }
     }
 
     fn id(&self) -> u128 {

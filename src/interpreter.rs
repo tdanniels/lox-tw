@@ -120,7 +120,11 @@ impl Interpreter {
 
         let mut methods = HashMap::new();
         for method in &stmt.methods {
-            let function = LoxFunction::new(method.clone(), self.environment.clone());
+            let function = LoxFunction::new(
+                method.clone(),
+                self.environment.clone(),
+                method.name.lexeme == "init",
+            );
             methods.insert(method.name.lexeme.clone(), function);
         }
 
@@ -154,6 +158,7 @@ impl Interpreter {
         let function = Gc::new(LoxCallable::Function(LoxFunction::new(
             stmt.clone(),
             self.environment.clone(),
+            false,
         )));
         self.environment
             .define(&stmt.name.lexeme, Gc::new(OCallable(function)));
@@ -715,6 +720,30 @@ mod test {
 
         "#;
         let expected_output = "A\nB\nB\nC\nC\n";
+        interpreter_test(source, expected_output, 0, None)
+    }
+
+    #[test]
+    fn simple_initializer() -> Result<()> {
+        let source = r#"
+            class Foo {
+                init(x, y, z) {
+                    this.x = x;
+                    this.y = y;
+                    this.z = z;
+                }
+
+                do_print() {
+                    print this.x;
+                    print this.y;
+                    print this.z;
+                }
+            }
+
+            var foo = Foo(3, 5, 9);
+            foo.do_print();
+        "#;
+        let expected_output = "3\n5\n9\n";
         interpreter_test(source, expected_output, 0, None)
     }
 }

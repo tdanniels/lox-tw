@@ -13,6 +13,7 @@ use gc::Gc;
 enum FunctionType {
     None,
     Function,
+    Initializer,
     Method,
 }
 
@@ -65,7 +66,11 @@ where
         self.scopes.last_mut().unwrap().insert("this", true);
 
         for method in &stmt.methods {
-            let declaration = FunctionType::Method;
+            let declaration = if method.name.lexeme == "init" {
+                FunctionType::Initializer
+            } else {
+                FunctionType::Method
+            };
             self.resolve_function(method, declaration)?;
         }
 
@@ -112,6 +117,13 @@ where
         }
 
         if let Some(value) = &stmt.value {
+            if self.current_function == FunctionType::Initializer {
+                (self.error_handler.borrow_mut())(
+                    stmt.keyword.clone(),
+                    "Can't return a value from an initializer.",
+                );
+            }
+
             self.resolve_expr(value)?;
         }
 
@@ -183,7 +195,7 @@ where
     }
 
     fn visit_this_expr(&mut self, expr: &expr::This) -> Result<()> {
-        if let ClassType::None = self.current_class {
+        if self.current_class == ClassType::None {
             (self.error_handler.borrow_mut())(
                 expr.keyword.clone(),
                 "Can't use 'this' outside of a class.",

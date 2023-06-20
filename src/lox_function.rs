@@ -14,14 +14,20 @@ use gc::{Finalize, Gc, Trace};
 
 #[derive(Clone, Debug, Finalize, Trace)]
 pub struct LoxFunction {
+    is_initializer: bool,
     closure: Environment,
     declaration: Gc<stmt::Function>,
     id: u128,
 }
 
 impl LoxFunction {
-    pub fn new(declaration: Gc<stmt::Function>, closure: Environment) -> Self {
+    pub fn new(
+        declaration: Gc<stmt::Function>,
+        closure: Environment,
+        is_initializer: bool,
+    ) -> Self {
         Self {
+            is_initializer,
             closure,
             declaration,
             id: unique_u128(),
@@ -31,7 +37,7 @@ impl LoxFunction {
     pub fn bind(&self, instance: Gc<LoxInstance>) -> LoxFunction {
         let environment = Environment::new(Some(self.closure.clone()));
         environment.define("this", Object::Instance(instance).into());
-        LoxFunction::new(self.declaration.clone(), environment)
+        LoxFunction::new(self.declaration.clone(), environment, self.is_initializer)
     }
 
     pub fn arity(&self) -> usize {
@@ -50,11 +56,19 @@ impl LoxFunction {
 
         if let Err(err) = interpreter.execute_block(&self.declaration.body, environment) {
             if let Some(return_value) = err.downcast_ref::<Return>() {
+                if self.is_initializer {
+                    return Ok(self.closure.get_at(0, "this"));
+                }
                 return Ok(return_value.value.clone());
             } else {
                 return Err(err);
             }
         }
+
+        if self.is_initializer {
+            return Ok(self.closure.get_at(0, "this"));
+        }
+
         Ok(Gc::new(Object::Nil))
     }
 
