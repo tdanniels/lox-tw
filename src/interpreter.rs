@@ -132,6 +132,19 @@ impl Interpreter {
 
         self.environment.define(&stmt.name.lexeme, ONil.into());
 
+        if stmt.superclass.is_some() {
+            self.environment = Environment::new(Some(self.environment.clone()));
+            self.environment.define(
+                "super",
+                OClass(
+                    superclass
+                        .clone()
+                        .expect("Expect Some(superclass) if there's a superclass."),
+                )
+                .into(),
+            );
+        }
+
         let mut methods = HashMap::new();
         for method in &stmt.methods {
             let function = LoxFunction::new(
@@ -142,7 +155,15 @@ impl Interpreter {
             methods.insert(method.name.lexeme.clone(), function);
         }
 
-        let class = LoxClass::new(&stmt.name.lexeme, superclass, methods);
+        let class = LoxClass::new(&stmt.name.lexeme, superclass.clone(), methods);
+
+        if superclass.is_some() {
+            self.environment = self
+                .environment
+                .enclosing()
+                .expect("Expect an enclosing environment if there's a superclass.");
+        }
+
         self.environment.assign(&stmt.name, OClass(class).into())?;
         Ok(())
     }
@@ -157,6 +178,7 @@ impl Interpreter {
             Expr::Literal(ex) => self.visit_literal_expr(ex.clone()),
             Expr::Logical(ex) => self.visit_logical_expr(ex.clone()),
             Expr::Set(ex) => self.visit_set_expr(ex.clone()),
+            Expr::Super(ex) => self.visit_super_expr(ex.clone()),
             Expr::This(ex) => self.visit_this_expr(ex.clone()),
             Expr::Unary(ex) => self.visit_unary_expr(ex.clone()),
             Expr::Variable(ex) => self.visit_variable_expr(ex.clone()),
@@ -378,6 +400,44 @@ impl Interpreter {
         } else {
             Err(RuntimeError::new(expr.name.clone(), "Only instances have fields.").into())
         }
+    }
+
+    fn visit_super_expr(&mut self, expr: Gc<expr::Super>) -> Result<Gc<Object>> {
+        let distance = self
+            .locals
+            .get(&expr.id())
+            .expect("Expect a 'super' local if visiting a 'super' expr.");
+        let superclass = {
+            let obj = self.environment.get_at(*distance, "super");
+            if let OClass(superclass) = &*obj {
+                superclass.clone()
+            } else {
+                panic!("Expect 'super' to be a class object.");
+            }
+        };
+
+        let object = {
+            let obj = self.environment.get_at(*distance - 1, "this");
+            if let OInstance(instance) = &*obj {
+                instance.clone()
+            } else {
+                panic!("Expect 'super' to be a class object.");
+            }
+        };
+
+        let method = superclass.find_method(&expr.method.lexeme);
+
+        if let Some(method) = method {
+            return Ok(
+                OCallable(LoxCallable::Function(method.bind(object)).into()).into(),
+            );
+        }
+
+        Err(RuntimeError::new(
+            expr.method.clone(),
+            &format!("Undefined property '{}'.", expr.method.lexeme),
+        )
+        .into())
     }
 
     fn visit_this_expr(&self, expr: Gc<expr::This>) -> Result<Gc<Object>> {
@@ -786,6 +846,28 @@ mod test {
             B().say2();
         "#;
         let expected_output = "a\naa\na\nbb\n";
+        interpreter_test(source, expected_output, 0, None)
+    }
+
+    #[test]
+    fn call_superclass_method() -> Result<()> {
+        let source = r#"
+            class A {
+                say() {
+                    print "a";
+                }
+            }
+
+            class B < A {
+                say() {
+                    super.say();
+                    print "b";
+                }
+            }
+
+            B().say();
+        "#;
+        let expected_output = "a\nb\n";
         interpreter_test(source, expected_output, 0, None)
     }
 }

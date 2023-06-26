@@ -21,10 +21,12 @@ crate::ast_struct!(Expr, Grouping, expression, Expr);
 crate::ast_struct!(Expr, Literal, value, Gc<Object>);
 crate::ast_struct!(Expr, Logical, left, Expr, operator, Gc<Token>, right, Expr);
 crate::ast_struct!(Expr, Set, object, Expr, name, Gc<Token>, value, Expr);
+crate::ast_struct!(Expr, Super, keyword, Gc<Token>, method, Gc<Token>);
 crate::ast_struct!(Expr, This, keyword, Gc<Token>);
 crate::ast_struct!(Expr, Unary, operator, Gc<Token>, right, Expr);
 crate::ast_struct!(Expr, Variable, name, Gc<Token>);
 
 crate::ast_enum!(
-    Expr, Assign, Binary, Call, Get, Grouping, Literal, Logical, Set, This, Unary, Variable
+    Expr, Assign, Binary, Call, Get, Grouping, Literal, Logical, Set, Super, This, Unary,
+    Variable
 );

@@ -21,6 +21,7 @@ enum FunctionType {
 enum ClassType {
     None,
     Class,
+    SubClass,
 }
 
 pub struct Resolver<'a, F>
@@ -69,7 +70,13 @@ where
                     "A class can't inherit from itself.",
                 );
             }
+            self.current_class = ClassType::SubClass;
             self.visit_variable_expr(superclass)?;
+        }
+
+        if stmt.superclass.is_some() {
+            self.begin_scope();
+            self.scopes.last_mut().unwrap().insert("super", true);
         }
 
         self.begin_scope();
@@ -85,6 +92,10 @@ where
         }
 
         self.end_scope();
+
+        if stmt.superclass.is_some() {
+            self.end_scope();
+        }
 
         self.current_class = enclosing_class;
 
@@ -204,6 +215,23 @@ where
         Ok(())
     }
 
+    fn visit_super_expr(&mut self, expr: &expr::Super) -> Result<()> {
+        if self.current_class == ClassType::None {
+            (self.error_handler.borrow_mut())(
+                expr.keyword.clone(),
+                "Can't use 'super' outside of a class.",
+            );
+        } else if self.current_class != ClassType::SubClass {
+            (self.error_handler.borrow_mut())(
+                expr.keyword.clone(),
+                "Can't use 'super' in a class with no superclass.",
+            );
+        }
+
+        self.resolve_local(expr.id(), &expr.keyword)?;
+        Ok(())
+    }
+
     fn visit_this_expr(&mut self, expr: &expr::This) -> Result<()> {
         if self.current_class == ClassType::None {
             (self.error_handler.borrow_mut())(
@@ -273,6 +301,7 @@ where
             Expr::Literal(ex) => self.visit_literal_expr(ex),
             Expr::Logical(ex) => self.visit_logical_expr(ex),
             Expr::Set(ex) => self.visit_set_expr(ex),
+            Expr::Super(ex) => self.visit_super_expr(ex),
             Expr::This(ex) => self.visit_this_expr(ex),
             Expr::Unary(ex) => self.visit_unary_expr(ex),
             Expr::Variable(ex) => self.visit_variable_expr(ex),

@@ -14,6 +14,10 @@ impl Environment {
         Self(Gc::new(GcCell::new(EnvironmentInternal::new(enclosing))))
     }
 
+    pub fn enclosing(&self) -> Option<Self> {
+        self.0.borrow().enclosing.clone()
+    }
+
     pub fn get(&self, name: &Token) -> Result<Gc<Object>> {
         self.0.borrow().get(name)
     }
@@ -26,7 +30,7 @@ impl Environment {
         self.0.borrow_mut().define(name, value)
     }
 
-    fn ancestor(&self, distance: usize) -> Environment {
+    fn ancestor(&self, distance: usize) -> Self {
         if distance == 0 {
             self.clone()
         } else {

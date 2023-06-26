@@ -424,6 +424,13 @@ where
             return Ok(expr::Literal::make(self.previous().literal.clone().into()));
         }
 
+        if self.match_(&[TT::Super]) {
+            let keyword = self.previous();
+            self.consume(TT::Dot, "Expect '.' after 'super'.")?;
+            let method = self.consume(TT::Identifier, "Expect superclass method name.")?;
+            return Ok(expr::Super::make(keyword, method));
+        }
+
         if self.match_(&[TT::This]) {
             return Ok(expr::This::make(self.previous()));
         }

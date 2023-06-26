@@ -41,6 +41,7 @@ fn visit(expr: &Expr) -> String {
             &ex.object,
             &ex.value
         ),
+        Expr::Super(ex) => ex.keyword.lexeme.to_string(),
         Expr::This(ex) => ex.keyword.lexeme.to_string(),
         Expr::Unary(ex) => parenthesize!(&ex.operator.lexeme, &ex.right),
         Expr::Variable(ex) => ex.name.lexeme.to_string(),
