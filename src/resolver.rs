@@ -62,6 +62,16 @@ where
         self.declare(&stmt.name);
         self.define(&stmt.name);
 
+        if let Some(superclass) = &stmt.superclass {
+            if stmt.name.lexeme == superclass.name.lexeme {
+                (self.error_handler.borrow_mut())(
+                    superclass.name.clone(),
+                    "A class can't inherit from itself.",
+                );
+            }
+            self.visit_variable_expr(superclass)?;
+        }
+
         self.begin_scope();
         self.scopes.last_mut().unwrap().insert("this", true);
 

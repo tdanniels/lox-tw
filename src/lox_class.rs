@@ -14,8 +14,12 @@ use gc::{Finalize, Gc, Trace};
 pub struct LoxClass(Gc<LoxClassInternal>);
 
 impl LoxClass {
-    pub fn new(name: &str, methods: HashMap<String, LoxFunction>) -> Self {
-        Self(LoxClassInternal::new(name, methods).into())
+    pub fn new(
+        name: &str,
+        superclass: Option<LoxClass>,
+        methods: HashMap<String, LoxFunction>,
+    ) -> Self {
+        Self(LoxClassInternal::new(name, superclass, methods).into())
     }
 
     pub fn find_method(&self, name: &str) -> Option<LoxFunction> {
@@ -64,21 +68,33 @@ impl PartialEq for LoxClass {
 #[derive(Clone, Debug, Finalize, Trace)]
 struct LoxClassInternal {
     name: String,
+    superclass: Option<LoxClass>,
     methods: HashMap<String, LoxFunction>,
     id: u128,
 }
 
 impl LoxClassInternal {
-    fn new(name: &str, methods: HashMap<String, LoxFunction>) -> Self {
+    fn new(
+        name: &str,
+        superclass: Option<LoxClass>,
+        methods: HashMap<String, LoxFunction>,
+    ) -> Self {
         Self {
             name: name.to_owned(),
+            superclass,
             methods,
             id: unique_u128(),
         }
     }
 
     fn find_method(&self, name: &str) -> Option<LoxFunction> {
-        self.methods.get(name).cloned()
+        self.methods.get(name).cloned().or_else(|| {
+            if let Some(superclass) = &self.superclass {
+                superclass.find_method(name)
+            } else {
+                None
+            }
+        })
     }
 
     fn arity(&self) -> usize {

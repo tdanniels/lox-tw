@@ -116,6 +116,20 @@ impl Interpreter {
     }
 
     fn visit_class_stmt(&mut self, stmt: Gc<stmt::Class>) -> Result<()> {
+        let superclass = if let Some(superclass) = stmt.superclass.clone() {
+            if let OClass(c) = &*self.evaluate(Expr::Variable(superclass.clone()))? {
+                Some(c.clone())
+            } else {
+                return Err(RuntimeError::new(
+                    superclass.name.clone(),
+                    "Superclass must be a class.",
+                )
+                .into());
+            }
+        } else {
+            None
+        };
+
         self.environment.define(&stmt.name.lexeme, ONil.into());
 
         let mut methods = HashMap::new();
@@ -128,7 +142,7 @@ impl Interpreter {
             methods.insert(method.name.lexeme.clone(), function);
         }
 
-        let class = LoxClass::new(&stmt.name.lexeme, methods);
+        let class = LoxClass::new(&stmt.name.lexeme, superclass, methods);
         self.environment.assign(&stmt.name, OClass(class).into())?;
         Ok(())
     }
@@ -744,6 +758,34 @@ mod test {
             foo.do_print();
         "#;
         let expected_output = "3\n5\n9\n";
+        interpreter_test(source, expected_output, 0, None)
+    }
+
+    #[test]
+    fn simple_inheritance() -> Result<()> {
+        let source = r#"
+            class A {
+                say() {
+                    print "a";
+                }
+
+                say2() {
+                    print "aa";
+                }
+            }
+
+            class B < A {
+                say2() {
+                    print "bb";
+                }
+            }
+
+            A().say();
+            A().say2();
+            B().say();
+            B().say2();
+        "#;
+        let expected_output = "a\naa\na\nbb\n";
         interpreter_test(source, expected_output, 0, None)
     }
 }

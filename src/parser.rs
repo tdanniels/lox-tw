@@ -84,6 +84,14 @@ where
 
     fn class_declaration(&self) -> Result<Stmt> {
         let name = self.consume(TT::Identifier, "Expect class name.")?;
+
+        let superclass = if self.match_(&[TT::Less]) {
+            self.consume(TT::Identifier, "Expect superclass name.")?;
+            Some(expr::Variable::new(self.previous()).into())
+        } else {
+            None
+        };
+
         self.consume(TT::LeftBrace, "Expect '{' before class body.")?;
 
         let mut methods = Vec::new();
@@ -93,7 +101,7 @@ where
 
         self.consume(TT::RightBrace, "Expect '}' after class body.")?;
 
-        Ok(stmt::Class::make(name, methods))
+        Ok(stmt::Class::make(name, superclass, methods))
     }
 
     fn statement(&self) -> Result<Stmt> {

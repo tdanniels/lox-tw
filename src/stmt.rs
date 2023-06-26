@@ -1,11 +1,20 @@
-use crate::expr::Expr;
+use crate::expr::{Expr, Variable};
 use crate::token::Token;
 use crate::unique_id::unique_usize;
 
 use gc::{Finalize, Gc, Trace};
 
 crate::ast_struct!(Stmt, Block, statements, Vec<Stmt>);
-crate::ast_struct!(Stmt, Class, name, Gc<Token>, methods, Vec<Gc<Function>>);
+crate::ast_struct!(
+    Stmt,
+    Class,
+    name,
+    Gc<Token>,
+    superclass,
+    Option<Gc<Variable>>,
+    methods,
+    Vec<Gc<Function>>
+);
 crate::ast_struct!(Stmt, Expression, expression, Expr);
 crate::ast_struct!(
     Stmt,
