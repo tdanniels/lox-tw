@@ -72,7 +72,7 @@ impl Lox {
         }
 
         Resolver::new(&mut self.interpreter.borrow_mut(), |t, m| {
-            self.token_error(&t, m)
+            self.token_error(t, m)
         })
         .resolve(&statements)
         .expect("Unexpected variable resolution error.");

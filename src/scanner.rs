@@ -65,6 +65,10 @@ where
         }
     }
 
+    fn error(&mut self, message: &str) {
+        (self.error_handler)(self.line, message);
+    }
+
     pub fn scan_tokens(mut self) -> Vec<Gc<Token>> {
         while !self.is_at_end() {
             self.start = self.current;
@@ -119,7 +123,7 @@ where
             b'"' => self.string(),
             x if is_digit(x) => self.number(),
             x if is_alpha(x) => self.identifier(),
-            _ => (self.error_handler)(self.line, "Unexpected character."),
+            _ => self.error("Unexpected character."),
         }
     }
 
@@ -164,7 +168,7 @@ where
         }
 
         if self.is_at_end() {
-            (self.error_handler)(self.line, "Unterminated string.");
+            self.error("Unterminated string.");
             return;
         }
 

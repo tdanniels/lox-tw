@@ -7,8 +7,6 @@ use crate::token::Token;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use gc::Gc;
-
 #[derive(Clone, Copy, PartialEq)]
 enum FunctionType {
     None,
@@ -26,7 +24,7 @@ enum ClassType {
 
 pub struct Resolver<'a, F>
 where
-    F: FnMut(Gc<Token>, &str),
+    F: FnMut(&Token, &str),
 {
     interpreter: &'a mut Interpreter,
     scopes: Vec<HashMap<&'a str, bool>>,
@@ -37,7 +35,7 @@ where
 
 impl<'a, F> Resolver<'a, F>
 where
-    F: FnMut(Gc<Token>, &str),
+    F: FnMut(&Token, &str),
 {
     pub fn new(interpreter: &'a mut Interpreter, error_handler: F) -> Self {
         Self {
@@ -48,6 +46,11 @@ where
             error_handler: error_handler.into(),
         }
     }
+
+    fn error(&self, token: &Token, message: &str) {
+        (self.error_handler.borrow_mut())(token, message);
+    }
+
     fn visit_block_stmt(&mut self, stmt: &'a stmt::Block) -> Result<()> {
         self.begin_scope();
         self.resolve_stmts(&stmt.statements)?;
@@ -65,10 +68,7 @@ where
 
         if let Some(superclass) = &stmt.superclass {
             if stmt.name.lexeme == superclass.name.lexeme {
-                (self.error_handler.borrow_mut())(
-                    superclass.name.clone(),
-                    "A class can't inherit from itself.",
-                );
+                self.error(&superclass.name, "A class can't inherit from itself.");
             }
             self.current_class = ClassType::SubClass;
             self.visit_variable_expr(superclass)?;
@@ -131,18 +131,12 @@ where
 
     fn visit_return_stmt(&mut self, stmt: &stmt::Return) -> Result<()> {
         if self.current_function == FunctionType::None {
-            (self.error_handler.borrow_mut())(
-                stmt.keyword.clone(),
-                "Can't return from top-level code.",
-            );
+            self.error(&stmt.keyword, "Can't return from top-level code.");
         }
 
         if let Some(value) = &stmt.value {
             if self.current_function == FunctionType::Initializer {
-                (self.error_handler.borrow_mut())(
-                    stmt.keyword.clone(),
-                    "Can't return a value from an initializer.",
-                );
+                self.error(&stmt.keyword, "Can't return a value from an initializer.");
             }
 
             self.resolve_expr(value)?;
@@ -217,13 +211,10 @@ where
 
     fn visit_super_expr(&mut self, expr: &expr::Super) -> Result<()> {
         if self.current_class == ClassType::None {
-            (self.error_handler.borrow_mut())(
-                expr.keyword.clone(),
-                "Can't use 'super' outside of a class.",
-            );
+            self.error(&expr.keyword, "Can't use 'super' outside of a class.");
         } else if self.current_class != ClassType::SubClass {
-            (self.error_handler.borrow_mut())(
-                expr.keyword.clone(),
+            self.error(
+                &expr.keyword,
                 "Can't use 'super' in a class with no superclass.",
             );
         }
@@ -234,10 +225,7 @@ where
 
     fn visit_this_expr(&mut self, expr: &expr::This) -> Result<()> {
         if self.current_class == ClassType::None {
-            (self.error_handler.borrow_mut())(
-                expr.keyword.clone(),
-                "Can't use 'this' outside of a class.",
-            );
+            self.error(&expr.keyword, "Can't use 'this' outside of a class.");
             return Ok(());
         }
 
@@ -256,8 +244,8 @@ where
             .last()
             .map_or(false, |s| s.get(&expr.name.lexeme.as_str()) == Some(&false))
         {
-            (self.error_handler.borrow_mut())(
-                expr.name.clone(),
+            self.error(
+                &expr.name,
                 "Can't read local variable in its own initializer.",
             );
         }
@@ -337,13 +325,12 @@ where
     }
 
     fn declare(&mut self, name: &'a Token) {
-        if let Some(scope) = self.scopes.last_mut() {
+        if let Some(scope) = self.scopes.last() {
             if scope.contains_key(name.lexeme.as_str()) {
-                (self.error_handler.borrow_mut())(
-                    Gc::new(name.clone()),
-                    "Already a variable with this name in this scope.",
-                );
+                self.error(name, "Already a variable with this name in this scope.");
             }
+        }
+        if let Some(scope) = self.scopes.last_mut() {
             scope.insert(&name.lexeme, false);
         }
     }
@@ -373,7 +360,7 @@ mod test {
     use crate::parser::Parser;
     use crate::scanner::Scanner;
 
-    use gc::GcCell;
+    use gc::{Gc, GcCell};
 
     fn resolver_test(
         source: &str,
