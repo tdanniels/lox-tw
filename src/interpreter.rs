@@ -428,9 +428,7 @@ impl Interpreter {
         let method = superclass.find_method(&expr.method.lexeme);
 
         if let Some(method) = method {
-            return Ok(
-                OCallable(LoxCallable::Function(method.bind(object)).into()).into(),
-            );
+            return Ok(OCallable(LoxCallable::Function(method.bind(object)).into()).into());
         }
 
         Err(RuntimeError::new(
