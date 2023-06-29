@@ -44,7 +44,7 @@ impl Environment {
     }
 
     pub fn get_at(&self, distance: usize, name: &str) -> Gc<Object> {
-        self.ancestor(distance).0.borrow().get_at(name)
+        self.ancestor(distance).0.borrow().get_at(name, distance)
     }
 
     pub fn assign_at(&self, distance: usize, name: &Token, value: Gc<Object>) {
@@ -113,10 +113,12 @@ impl EnvironmentInternal {
         self.values.insert(name.to_owned(), Gc::clone(&value));
     }
 
-    fn get_at(&self, name: &str) -> Gc<Object> {
+    fn get_at(&self, name: &str, distance: usize) -> Gc<Object> {
         self.values
             .get(name)
-            .expect("Didn't find local variable {name} at distance {distance}")
+            .unwrap_or_else(|| {
+                panic!("Didn't find local variable {name} at distance {distance}")
+            })
             .clone()
     }
 
