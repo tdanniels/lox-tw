@@ -32,7 +32,7 @@ fn main() -> Result<()> {
 
     match args.len() {
         1 => lox.run_prompt()?,
-        2 => lox.run_file(&args[0])?,
+        2 => lox.run_file(&args[1])?,
         _ => {
             eprintln!("Usage: lox-tw [script]");
             process::exit(64);
