@@ -36,7 +36,7 @@ impl LoxFunction {
 
     pub fn bind(&self, instance: LoxInstance) -> LoxFunction {
         let environment = Environment::new(Some(self.closure.clone()));
-        environment.define("this", Object::Instance(instance).into());
+        environment.define("this", Object::Instance(instance));
         LoxFunction::new(self.declaration.clone(), environment, self.is_initializer)
     }
 
@@ -47,8 +47,8 @@ impl LoxFunction {
     pub fn call(
         &self,
         interpreter: &mut Interpreter,
-        arguments: &[Gc<Object>],
-    ) -> Result<Gc<Object>> {
+        arguments: &[Object],
+    ) -> Result<Object> {
         let environment = Environment::new(Some(self.closure.clone()));
         for (param, arg) in zip(self.declaration.params.iter(), arguments.iter()) {
             environment.define(&param.lexeme, arg.clone());
@@ -69,7 +69,7 @@ impl LoxFunction {
             return Ok(self.closure.get_at(0, "this"));
         }
 
-        Ok(Gc::new(Object::Nil))
+        Ok(Object::Nil)
     }
 
     pub fn id(&self) -> u128 {

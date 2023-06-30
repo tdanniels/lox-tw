@@ -35,8 +35,8 @@ impl LoxClass {
     pub fn call(
         &self,
         interpreter: &mut Interpreter,
-        arguments: &[Gc<Object>],
-    ) -> Result<Gc<Object>> {
+        arguments: &[Object],
+    ) -> Result<Object> {
         let instance = LoxInstance::new(self.clone());
 
         if let Some(initializer) = self.find_method("init") {
@@ -45,7 +45,7 @@ impl LoxClass {
                 .call(interpreter, arguments)?;
         }
 
-        Ok(Object::Instance(instance).into())
+        Ok(Object::Instance(instance))
     }
 
     pub fn id(&self) -> u128 {

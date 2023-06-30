@@ -8,7 +8,7 @@ use crate::unique_id::unique_u128;
 use std::fmt::{self, Debug, Display};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use gc::{Finalize, Gc, Trace};
+use gc::{Finalize, Trace};
 
 #[derive(Clone, Debug, Finalize, Trace)]
 pub enum LoxCallable {
@@ -29,8 +29,8 @@ impl LoxCallable {
     pub fn call(
         &self,
         interpreter: &mut Interpreter,
-        arguments: &[Gc<Object>],
-    ) -> Result<Gc<Object>> {
+        arguments: &[Object],
+    ) -> Result<Object> {
         match self {
             LoxCallable::Class(c) => c.call(interpreter, arguments),
             LoxCallable::Clock(c) => c.call(interpreter, arguments),
@@ -77,17 +77,13 @@ impl Clock {
         0
     }
 
-    fn call(
-        &self,
-        _interpreter: &mut Interpreter,
-        _arguments: &[Gc<Object>],
-    ) -> Result<Gc<Object>> {
-        Ok(Gc::new(Object::Number(
+    fn call(&self, _interpreter: &mut Interpreter, _arguments: &[Object]) -> Result<Object> {
+        Ok(Object::Number(
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("Time went backwards.")
                 .as_secs_f64(),
-        )))
+        ))
     }
 
     fn id(&self) -> u128 {

@@ -12,7 +12,7 @@ use gc::{Finalize, Gc, GcCell, Trace};
 #[derive(Clone, Debug, Finalize, PartialEq, Trace)]
 pub struct LoxInstance {
     class: LoxClass,
-    fields: Gc<GcCell<HashMap<String, Gc<Object>>>>,
+    fields: Gc<GcCell<HashMap<String, Object>>>,
 }
 
 impl LoxInstance {
@@ -23,15 +23,15 @@ impl LoxInstance {
         }
     }
 
-    pub fn get(&self, name: &Token) -> Result<Gc<Object>> {
+    pub fn get(&self, name: &Token) -> Result<Object> {
         if let Some(field) = self.fields.borrow().get(&name.lexeme) {
             return Ok(field.clone());
         }
 
         if let Some(method) = self.class.find_method(&name.lexeme) {
-            return Ok(
-                Object::Callable(LoxCallable::Function(method.bind(self.clone()))).into(),
-            );
+            return Ok(Object::Callable(LoxCallable::Function(
+                method.bind(self.clone()),
+            )));
         }
 
         Err(RuntimeError::new(
@@ -41,7 +41,7 @@ impl LoxInstance {
         .into())
     }
 
-    pub fn set(&self, name: &Token, value: Gc<Object>) {
+    pub fn set(&self, name: &Token, value: Object) {
         self.fields.borrow_mut().insert(name.lexeme.clone(), value);
     }
 }

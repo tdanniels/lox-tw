@@ -18,15 +18,15 @@ impl Environment {
         self.0.borrow().enclosing.clone()
     }
 
-    pub fn get(&self, name: &Token) -> Result<Gc<Object>> {
+    pub fn get(&self, name: &Token) -> Result<Object> {
         self.0.borrow().get(name)
     }
 
-    pub fn assign(&self, name: &Token, value: Gc<Object>) -> Result<()> {
+    pub fn assign(&self, name: &Token, value: Object) -> Result<()> {
         self.0.borrow_mut().assign(name, value)
     }
 
-    pub fn define(&self, name: &str, value: Gc<Object>) {
+    pub fn define(&self, name: &str, value: Object) {
         self.0.borrow_mut().define(name, value)
     }
 
@@ -43,11 +43,11 @@ impl Environment {
         }
     }
 
-    pub fn get_at(&self, distance: usize, name: &str) -> Gc<Object> {
+    pub fn get_at(&self, distance: usize, name: &str) -> Object {
         self.ancestor(distance).0.borrow().get_at(name, distance)
     }
 
-    pub fn assign_at(&self, distance: usize, name: &Token, value: Gc<Object>) {
+    pub fn assign_at(&self, distance: usize, name: &Token, value: Object) {
         self.ancestor(distance)
             .0
             .borrow_mut()
@@ -58,7 +58,7 @@ impl Environment {
 #[derive(Clone, Debug, Finalize, Trace)]
 struct EnvironmentInternal {
     enclosing: Option<Environment>,
-    values: HashMap<String, Gc<Object>>,
+    values: HashMap<String, Object>,
 }
 
 impl EnvironmentInternal {
@@ -69,7 +69,7 @@ impl EnvironmentInternal {
         }
     }
 
-    fn get(&self, name: &Token) -> Result<Gc<Object>> {
+    fn get(&self, name: &Token) -> Result<Object> {
         self.values
             .get(&name.lexeme)
             .map_or_else(
@@ -80,7 +80,7 @@ impl EnvironmentInternal {
                         None
                     }
                 },
-                |value| Some(Gc::clone(value)),
+                |value| Some(value.clone()),
             )
             .ok_or(
                 RuntimeError::new(
@@ -91,7 +91,7 @@ impl EnvironmentInternal {
             )
     }
 
-    fn assign(&mut self, name: &Token, value: Gc<Object>) -> Result<()> {
+    fn assign(&mut self, name: &Token, value: Object) -> Result<()> {
         if let Some(v) = self.values.get_mut(&name.lexeme) {
             *v = value;
             return Ok(());
@@ -109,11 +109,11 @@ impl EnvironmentInternal {
         .into())
     }
 
-    fn define(&mut self, name: &str, value: Gc<Object>) {
-        self.values.insert(name.to_owned(), Gc::clone(&value));
+    fn define(&mut self, name: &str, value: Object) {
+        self.values.insert(name.to_owned(), value);
     }
 
-    fn get_at(&self, name: &str, distance: usize) -> Gc<Object> {
+    fn get_at(&self, name: &str, distance: usize) -> Object {
         self.values
             .get(name)
             .unwrap_or_else(|| {
@@ -122,8 +122,7 @@ impl EnvironmentInternal {
             .clone()
     }
 
-    fn assign_at(&mut self, name: &Token, value: Gc<Object>) {
-        self.values
-            .insert(name.lexeme.to_owned(), Gc::clone(&value));
+    fn assign_at(&mut self, name: &Token, value: Object) {
+        self.values.insert(name.lexeme.to_owned(), value);
     }
 }

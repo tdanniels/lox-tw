@@ -37,10 +37,7 @@ impl Interpreter {
     pub fn new(output: InterpreterOutput) -> Self {
         let globals = Environment::new(None);
 
-        globals.define(
-            "clock",
-            Gc::new(OCallable(LoxCallable::Clock(Clock::new()))),
-        );
+        globals.define("clock", OCallable(LoxCallable::Clock(Clock::new())));
 
         Self {
             globals: globals.clone(),
@@ -117,7 +114,7 @@ impl Interpreter {
 
     fn visit_class_stmt(&mut self, stmt: &Gc<stmt::Class>) -> Result<()> {
         let superclass = if let Some(superclass) = stmt.superclass.clone() {
-            if let OClass(c) = &*self.evaluate(&Expr::Variable(superclass.clone()))? {
+            if let OClass(ref c) = self.evaluate(&Expr::Variable(superclass.clone()))? {
                 Some(c.clone())
             } else {
                 return Err(RuntimeError::new(
@@ -130,7 +127,7 @@ impl Interpreter {
             None
         };
 
-        self.environment.define(&stmt.name.lexeme, ONil.into());
+        self.environment.define(&stmt.name.lexeme, ONil);
 
         if stmt.superclass.is_some() {
             self.environment = Environment::new(Some(self.environment.clone()));
@@ -140,8 +137,7 @@ impl Interpreter {
                     superclass
                         .clone()
                         .expect("Expect Some(superclass) if there's a superclass."),
-                )
-                .into(),
+                ),
             );
         }
 
@@ -164,11 +160,11 @@ impl Interpreter {
                 .expect("Expect an enclosing environment if there's a superclass.");
         }
 
-        self.environment.assign(&stmt.name, OClass(class).into())?;
+        self.environment.assign(&stmt.name, OClass(class))?;
         Ok(())
     }
 
-    fn evaluate(&mut self, expr: &Expr) -> Result<Gc<Object>> {
+    fn evaluate(&mut self, expr: &Expr) -> Result<Object> {
         match &expr {
             Expr::Assign(ex) => self.visit_assign_expr(ex),
             Expr::Binary(ex) => self.visit_binary_expr(ex),
@@ -197,12 +193,12 @@ impl Interpreter {
             false,
         ));
         self.environment
-            .define(&stmt.name.lexeme, Gc::new(OCallable(function)));
+            .define(&stmt.name.lexeme, OCallable(function));
         Ok(())
     }
 
     fn visit_if_stmt(&mut self, stmt: &Gc<stmt::If>) -> Result<()> {
-        if is_truthy(&*self.evaluate(&stmt.condition)?) {
+        if is_truthy(&self.evaluate(&stmt.condition)?) {
             self.execute(&stmt.then_branch)?;
         } else if let Some(else_branch) = &stmt.else_branch {
             self.execute(else_branch)?;
@@ -222,7 +218,7 @@ impl Interpreter {
     fn visit_return_stmt(&mut self, stmt: &Gc<stmt::Return>) -> Result<()> {
         let value = match &stmt.value {
             Some(expr) => self.evaluate(expr)?,
-            None => Gc::new(ONil),
+            None => ONil,
         };
 
         Err(Return::new(value).into())
@@ -232,7 +228,7 @@ impl Interpreter {
         let value = if let Some(initializer) = &stmt.initializer {
             self.evaluate(initializer)?
         } else {
-            Gc::new(ONil)
+            ONil
         };
 
         self.environment.define(&stmt.name.lexeme, value);
@@ -240,13 +236,13 @@ impl Interpreter {
     }
 
     fn visit_while_stmt(&mut self, stmt: &Gc<stmt::While>) -> Result<()> {
-        while is_truthy(&*self.evaluate(&stmt.condition)?) {
+        while is_truthy(&self.evaluate(&stmt.condition)?) {
             self.execute(&stmt.body)?;
         }
         Ok(())
     }
 
-    fn visit_assign_expr(&mut self, expr: &Gc<expr::Assign>) -> Result<Gc<Object>> {
+    fn visit_assign_expr(&mut self, expr: &Gc<expr::Assign>) -> Result<Object> {
         let value = self.evaluate(&expr.value)?;
 
         if let Some(distance) = self.locals.get(&expr.id()) {
@@ -259,7 +255,7 @@ impl Interpreter {
         Ok(value)
     }
 
-    fn visit_binary_expr(&mut self, expr: &Gc<expr::Binary>) -> Result<Gc<Object>> {
+    fn visit_binary_expr(&mut self, expr: &Gc<expr::Binary>) -> Result<Object> {
         let left = self.evaluate(&expr.left)?;
         let right = self.evaluate(&expr.right)?;
 
@@ -286,9 +282,9 @@ impl Interpreter {
                 let (l, r) = check_number_operands(&expr.operator, &left, &right)?;
                 ONumber(l - r)
             }
-            TT::Plus => match (left.as_ref(), right.as_ref()) {
+            TT::Plus => match (left, right) {
                 (ONumber(l), ONumber(r)) => ONumber(l + r),
-                (OString(l), OString(r)) => OString(Gc::new((**l).clone() + &**r)),
+                (OString(ref l), OString(ref r)) => OString(Gc::new((**l).clone() + &**r)),
                 _ => {
                     return Err(RuntimeError::new(
                         expr.operator.clone(),
@@ -307,17 +303,17 @@ impl Interpreter {
             }
             _ => unreachable!(),
         };
-        Ok(Gc::new(obj))
+        Ok(obj)
     }
 
-    fn visit_call_expr(&mut self, expr: &Gc<expr::Call>) -> Result<Gc<Object>> {
+    fn visit_call_expr(&mut self, expr: &Gc<expr::Call>) -> Result<Object> {
         let callee = {
             let callee = self.evaluate(&expr.callee)?;
 
-            if let OClass(class) = &*callee {
+            if let OClass(class) = &callee {
                 // TODO: it would be nice to drop this special case. This probably requires
                 // converting LoxCallable into a trait.
-                OCallable(LoxCallable::Class(class.clone())).into()
+                OCallable(LoxCallable::Class(class.clone()))
             } else {
                 callee
             }
@@ -329,7 +325,7 @@ impl Interpreter {
             .map(|arg| self.evaluate(arg))
             .collect::<Result<Vec<_>>>()?;
 
-        if let OCallable(function) = &*callee {
+        if let OCallable(function) = &callee {
             if arguments.len() != function.arity() {
                 Err(RuntimeError::new(
                     expr.paren.clone(),
@@ -352,23 +348,23 @@ impl Interpreter {
         }
     }
 
-    fn visit_get_expr(&mut self, expr: &Gc<expr::Get>) -> Result<Gc<Object>> {
+    fn visit_get_expr(&mut self, expr: &Gc<expr::Get>) -> Result<Object> {
         let object = self.evaluate(&expr.object)?;
-        if let OInstance(instance) = &*object {
+        if let OInstance(instance) = &object {
             return instance.get(&expr.name);
         }
         Err(RuntimeError::new(expr.name.clone(), "Only instances have properties.").into())
     }
 
-    fn visit_grouping_expr(&mut self, expr: &Gc<expr::Grouping>) -> Result<Gc<Object>> {
+    fn visit_grouping_expr(&mut self, expr: &Gc<expr::Grouping>) -> Result<Object> {
         self.evaluate(&expr.expression)
     }
 
-    fn visit_literal_expr(&mut self, expr: &Gc<expr::Literal>) -> Result<Gc<Object>> {
+    fn visit_literal_expr(&mut self, expr: &Gc<expr::Literal>) -> Result<Object> {
         Ok(expr.value.clone())
     }
 
-    fn visit_logical_expr(&mut self, expr: &Gc<expr::Logical>) -> Result<Gc<Object>> {
+    fn visit_logical_expr(&mut self, expr: &Gc<expr::Logical>) -> Result<Object> {
         let left = self.evaluate(&expr.left)?;
 
         match expr.operator.type_ {
@@ -388,10 +384,10 @@ impl Interpreter {
         self.evaluate(&expr.right)
     }
 
-    fn visit_set_expr(&mut self, expr: &Gc<expr::Set>) -> Result<Gc<Object>> {
+    fn visit_set_expr(&mut self, expr: &Gc<expr::Set>) -> Result<Object> {
         let object = self.evaluate(&expr.object)?;
 
-        if let OInstance(instance) = &*object {
+        if let OInstance(instance) = &object {
             let value = self.evaluate(&expr.value)?;
             instance.set(&expr.name, value.clone());
             Ok(value)
@@ -400,7 +396,7 @@ impl Interpreter {
         }
     }
 
-    fn visit_super_expr(&mut self, expr: &Gc<expr::Super>) -> Result<Gc<Object>> {
+    fn visit_super_expr(&mut self, expr: &Gc<expr::Super>) -> Result<Object> {
         let distance = self
             .locals
             .get(&expr.id())
@@ -408,7 +404,7 @@ impl Interpreter {
 
         let superclass = {
             let obj = self.environment.get_at(*distance, "super");
-            if let OClass(superclass) = &*obj {
+            if let OClass(superclass) = &obj {
                 superclass.clone()
             } else {
                 panic!("Expect 'super' to be a class object.");
@@ -417,7 +413,7 @@ impl Interpreter {
 
         let object = {
             let obj = self.environment.get_at(*distance - 1, "this");
-            if let OInstance(instance) = &*obj {
+            if let OInstance(instance) = &obj {
                 instance.clone()
             } else {
                 panic!("Expect 'super' to be a class object.");
@@ -427,7 +423,7 @@ impl Interpreter {
         let method = superclass.find_method(&expr.method.lexeme);
 
         if let Some(method) = method {
-            return Ok(OCallable(LoxCallable::Function(method.bind(object))).into());
+            return Ok(OCallable(LoxCallable::Function(method.bind(object))));
         }
 
         Err(RuntimeError::new(
@@ -437,28 +433,28 @@ impl Interpreter {
         .into())
     }
 
-    fn visit_this_expr(&self, expr: &Gc<expr::This>) -> Result<Gc<Object>> {
+    fn visit_this_expr(&self, expr: &Gc<expr::This>) -> Result<Object> {
         self.look_up_variable(&expr.keyword, expr.id())
     }
 
-    fn visit_unary_expr(&mut self, expr: &Gc<expr::Unary>) -> Result<Gc<Object>> {
+    fn visit_unary_expr(&mut self, expr: &Gc<expr::Unary>) -> Result<Object> {
         let right = self.evaluate(&expr.right)?;
 
         match expr.operator.type_ {
-            TT::Bang => Ok(Gc::new(OBoolean(!is_truthy(&right)))),
+            TT::Bang => Ok(OBoolean(!is_truthy(&right))),
             TT::Minus => {
                 let r = check_number_operand(&expr.operator, &right)?;
-                Ok(Gc::new(ONumber(-r)))
+                Ok(ONumber(-r))
             }
             _ => unreachable!(),
         }
     }
 
-    fn visit_variable_expr(&mut self, expr: &Gc<expr::Variable>) -> Result<Gc<Object>> {
+    fn visit_variable_expr(&mut self, expr: &Gc<expr::Variable>) -> Result<Object> {
         self.look_up_variable(&expr.name, expr.id())
     }
 
-    fn look_up_variable(&self, name: &Token, expr_id: usize) -> Result<Gc<Object>> {
+    fn look_up_variable(&self, name: &Token, expr_id: usize) -> Result<Object> {
         if let Some(distance) = self.locals.get(&expr_id) {
             Ok(self.environment.get_at(*distance, &name.lexeme))
         } else {
@@ -606,7 +602,7 @@ mod test {
 
         if let Stmt::Expression(expr_statement) = &statements[0] {
             let res = interpreter.evaluate(&expr_statement.expression)?;
-            assert_eq!(*res, Object::Number(-10.0));
+            assert_eq!(res, Object::Number(-10.0));
         } else {
             panic!("Expected an expression statement");
         }

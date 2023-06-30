@@ -3,15 +3,13 @@ use crate::object::Object;
 use std::error::Error;
 use std::fmt::{self, Display};
 
-use gc::{Finalize, Gc, Trace};
-
-#[derive(Debug, Finalize, Trace)]
+#[derive(Debug)]
 pub struct Return {
-    pub value: Gc<Object>,
+    pub value: Object,
 }
 
 impl Return {
-    pub fn new(value: Gc<Object>) -> Self {
+    pub fn new(value: Object) -> Self {
         Self { value }
     }
 }

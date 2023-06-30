@@ -158,7 +158,7 @@ where
         }
 
         if condition.is_none() {
-            condition = Some(expr::Literal::make(Object::Boolean(true).into()));
+            condition = Some(expr::Literal::make(Object::Boolean(true)));
         }
 
         body = stmt::While::make(condition.unwrap(), body);
@@ -411,17 +411,17 @@ where
 
     fn primary(&self) -> Result<Expr> {
         if self.match_(&[TT::False]) {
-            return Ok(expr::Literal::make(Object::Boolean(false).into()));
+            return Ok(expr::Literal::make(Object::Boolean(false)));
         }
         if self.match_(&[TT::True]) {
-            return Ok(expr::Literal::make(Object::Boolean(true).into()));
+            return Ok(expr::Literal::make(Object::Boolean(true)));
         }
         if self.match_(&[TT::Nil]) {
-            return Ok(expr::Literal::make(Object::Nil.into()));
+            return Ok(expr::Literal::make(Object::Nil));
         }
 
         if self.match_(&[TT::Number, TT::String]) {
-            return Ok(expr::Literal::make(self.previous().literal.clone().into()));
+            return Ok(expr::Literal::make(self.previous().literal.clone()));
         }
 
         if self.match_(&[TT::Super]) {
