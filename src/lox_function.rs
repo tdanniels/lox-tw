@@ -34,7 +34,7 @@ impl LoxFunction {
         }
     }
 
-    pub fn bind(&self, instance: Gc<LoxInstance>) -> LoxFunction {
+    pub fn bind(&self, instance: LoxInstance) -> LoxFunction {
         let environment = Environment::new(Some(self.closure.clone()));
         environment.define("this", Object::Instance(instance).into());
         LoxFunction::new(self.declaration.clone(), environment, self.is_initializer)

@@ -9,12 +9,12 @@ use gc::{Finalize, Gc, Trace};
 #[derive(Clone, Debug, Finalize, Trace)]
 pub enum Object {
     Boolean(bool),
-    Callable(Gc<LoxCallable>),
+    Callable(LoxCallable),
     Class(LoxClass),
-    Instance(Gc<LoxInstance>),
+    Instance(LoxInstance),
     Nil,
     Number(f64),
-    String(String),
+    String(Gc<String>),
 }
 
 impl fmt::Display for Object {

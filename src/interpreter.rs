@@ -39,7 +39,7 @@ impl Interpreter {
 
         globals.define(
             "clock",
-            Gc::new(OCallable(Gc::new(LoxCallable::Clock(Clock::new())))),
+            Gc::new(OCallable(LoxCallable::Clock(Clock::new()))),
         );
 
         Self {
@@ -191,11 +191,11 @@ impl Interpreter {
     }
 
     fn visit_function_stmt(&mut self, stmt: &Gc<stmt::Function>) -> Result<()> {
-        let function = Gc::new(LoxCallable::Function(LoxFunction::new(
+        let function = LoxCallable::Function(LoxFunction::new(
             stmt.clone(),
             self.environment.clone(),
             false,
-        )));
+        ));
         self.environment
             .define(&stmt.name.lexeme, Gc::new(OCallable(function)));
         Ok(())
@@ -288,7 +288,7 @@ impl Interpreter {
             }
             TT::Plus => match (left.as_ref(), right.as_ref()) {
                 (ONumber(l), ONumber(r)) => ONumber(l + r),
-                (OString(l), OString(r)) => OString(l.to_owned() + r.as_str()),
+                (OString(l), OString(r)) => OString(Gc::new((**l).clone() + &**r)),
                 _ => {
                     return Err(RuntimeError::new(
                         expr.operator.clone(),
@@ -317,7 +317,7 @@ impl Interpreter {
             if let OClass(class) = &*callee {
                 // TODO: it would be nice to drop this special case. This probably requires
                 // converting LoxCallable into a trait.
-                OCallable(LoxCallable::Class(class.clone()).into()).into()
+                OCallable(LoxCallable::Class(class.clone())).into()
             } else {
                 callee
             }
@@ -427,7 +427,7 @@ impl Interpreter {
         let method = superclass.find_method(&expr.method.lexeme);
 
         if let Some(method) = method {
-            return Ok(OCallable(LoxCallable::Function(method.bind(object)).into()).into());
+            return Ok(OCallable(LoxCallable::Function(method.bind(object))).into());
         }
 
         Err(RuntimeError::new(

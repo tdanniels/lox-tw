@@ -175,7 +175,7 @@ where
         self.advance();
 
         let value = self.source[self.start + 1..self.current - 1].to_owned();
-        self.add_token_literal(TT::String, Object::String(value));
+        self.add_token_literal(TT::String, Object::String(value.into()));
     }
 
     fn match_(&mut self, expected: u8) -> bool {
@@ -256,7 +256,13 @@ mod test {
                 Token::new(TT::Var, "var", Object::Nil, 1).into(),
                 Token::new(TT::Identifier, "b", Object::Nil, 1).into(),
                 Token::new(TT::Equal, "=", Object::Nil, 1).into(),
-                Token::new(TT::String, "\"2\"", Object::String("2".to_string()), 1).into(),
+                Token::new(
+                    TT::String,
+                    "\"2\"",
+                    Object::String("2".to_string().into()),
+                    1
+                )
+                .into(),
                 Token::new(TT::Semicolon, ";", Object::Nil, 1).into(),
                 Token::new(TT::Print, "print", Object::Nil, 2).into(),
                 Token::new(TT::Identifier, "a", Object::Nil, 2).into(),

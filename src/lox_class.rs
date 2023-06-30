@@ -37,7 +37,7 @@ impl LoxClass {
         interpreter: &mut Interpreter,
         arguments: &[Gc<Object>],
     ) -> Result<Gc<Object>> {
-        let instance = Gc::new(LoxInstance::new(self.clone()));
+        let instance = LoxInstance::new(self.clone());
 
         if let Some(initializer) = self.find_method("init") {
             initializer

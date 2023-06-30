@@ -29,10 +29,9 @@ impl LoxInstance {
         }
 
         if let Some(method) = self.class.find_method(&name.lexeme) {
-            return Ok(Object::Callable(
-                LoxCallable::Function(method.bind(self.clone().into())).into(),
-            )
-            .into());
+            return Ok(
+                Object::Callable(LoxCallable::Function(method.bind(self.clone()))).into(),
+            );
         }
 
         Err(RuntimeError::new(
