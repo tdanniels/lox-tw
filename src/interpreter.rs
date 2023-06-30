@@ -55,7 +55,7 @@ impl Interpreter {
         F: FnMut(&RuntimeError),
     {
         for statement in statements {
-            match self.execute(statement.clone()) {
+            match self.execute(statement) {
                 Ok(_) => {}
                 Err(error) => {
                     (error_handler)(
@@ -69,17 +69,17 @@ impl Interpreter {
         }
     }
 
-    fn execute(&mut self, stmt: Stmt) -> Result<()> {
+    fn execute(&mut self, stmt: &Stmt) -> Result<()> {
         match &stmt {
-            Stmt::Block(s) => self.visit_block_stmt(s.clone()),
-            Stmt::Class(s) => self.visit_class_stmt(s.clone()),
-            Stmt::Expression(s) => self.visit_expression_stmt(s.clone()),
-            Stmt::Function(s) => self.visit_function_stmt(s.clone()),
-            Stmt::If(s) => self.visit_if_stmt(s.clone()),
-            Stmt::Print(s) => self.visit_print_stmt(s.clone()),
-            Stmt::Return(s) => self.visit_return_stmt(s.clone()),
-            Stmt::Var(s) => self.visit_var_stmt(s.clone()),
-            Stmt::While(s) => self.visit_while_stmt(s.clone()),
+            Stmt::Block(s) => self.visit_block_stmt(s),
+            Stmt::Class(s) => self.visit_class_stmt(s),
+            Stmt::Expression(s) => self.visit_expression_stmt(s),
+            Stmt::Function(s) => self.visit_function_stmt(s),
+            Stmt::If(s) => self.visit_if_stmt(s),
+            Stmt::Print(s) => self.visit_print_stmt(s),
+            Stmt::Return(s) => self.visit_return_stmt(s),
+            Stmt::Var(s) => self.visit_var_stmt(s),
+            Stmt::While(s) => self.visit_while_stmt(s),
         }
     }
 
@@ -96,7 +96,7 @@ impl Interpreter {
         self.environment = environment;
 
         for statement in statements {
-            let result = self.execute(statement.clone());
+            let result = self.execute(statement);
             if result.is_err() {
                 self.environment = previous;
                 return result;
@@ -107,7 +107,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_block_stmt(&mut self, stmt: Gc<stmt::Block>) -> Result<()> {
+    fn visit_block_stmt(&mut self, stmt: &Gc<stmt::Block>) -> Result<()> {
         self.execute_block(
             &stmt.statements,
             Environment::new(Some(self.environment.clone())),
@@ -115,9 +115,9 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_class_stmt(&mut self, stmt: Gc<stmt::Class>) -> Result<()> {
+    fn visit_class_stmt(&mut self, stmt: &Gc<stmt::Class>) -> Result<()> {
         let superclass = if let Some(superclass) = stmt.superclass.clone() {
-            if let OClass(c) = &*self.evaluate(Expr::Variable(superclass.clone()))? {
+            if let OClass(c) = &*self.evaluate(&Expr::Variable(superclass.clone()))? {
                 Some(c.clone())
             } else {
                 return Err(RuntimeError::new(
@@ -168,29 +168,29 @@ impl Interpreter {
         Ok(())
     }
 
-    fn evaluate(&mut self, expr: Expr) -> Result<Gc<Object>> {
+    fn evaluate(&mut self, expr: &Expr) -> Result<Gc<Object>> {
         match &expr {
-            Expr::Assign(ex) => self.visit_assign_expr(ex.clone()),
-            Expr::Binary(ex) => self.visit_binary_expr(ex.clone()),
-            Expr::Call(ex) => self.visit_call_expr(ex.clone()),
-            Expr::Get(ex) => self.visit_get_expr(ex.clone()),
-            Expr::Grouping(ex) => self.visit_grouping_expr(ex.clone()),
-            Expr::Literal(ex) => self.visit_literal_expr(ex.clone()),
-            Expr::Logical(ex) => self.visit_logical_expr(ex.clone()),
-            Expr::Set(ex) => self.visit_set_expr(ex.clone()),
-            Expr::Super(ex) => self.visit_super_expr(ex.clone()),
-            Expr::This(ex) => self.visit_this_expr(ex.clone()),
-            Expr::Unary(ex) => self.visit_unary_expr(ex.clone()),
-            Expr::Variable(ex) => self.visit_variable_expr(ex.clone()),
+            Expr::Assign(ex) => self.visit_assign_expr(ex),
+            Expr::Binary(ex) => self.visit_binary_expr(ex),
+            Expr::Call(ex) => self.visit_call_expr(ex),
+            Expr::Get(ex) => self.visit_get_expr(ex),
+            Expr::Grouping(ex) => self.visit_grouping_expr(ex),
+            Expr::Literal(ex) => self.visit_literal_expr(ex),
+            Expr::Logical(ex) => self.visit_logical_expr(ex),
+            Expr::Set(ex) => self.visit_set_expr(ex),
+            Expr::Super(ex) => self.visit_super_expr(ex),
+            Expr::This(ex) => self.visit_this_expr(ex),
+            Expr::Unary(ex) => self.visit_unary_expr(ex),
+            Expr::Variable(ex) => self.visit_variable_expr(ex),
         }
     }
 
-    fn visit_expression_stmt(&mut self, stmt: Gc<stmt::Expression>) -> Result<()> {
-        self.evaluate(stmt.expression.clone())?;
+    fn visit_expression_stmt(&mut self, stmt: &Gc<stmt::Expression>) -> Result<()> {
+        self.evaluate(&stmt.expression)?;
         Ok(())
     }
 
-    fn visit_function_stmt(&mut self, stmt: Gc<stmt::Function>) -> Result<()> {
+    fn visit_function_stmt(&mut self, stmt: &Gc<stmt::Function>) -> Result<()> {
         let function = Gc::new(LoxCallable::Function(LoxFunction::new(
             stmt.clone(),
             self.environment.clone(),
@@ -201,17 +201,17 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_if_stmt(&mut self, stmt: Gc<stmt::If>) -> Result<()> {
-        if is_truthy(&*self.evaluate(stmt.condition.clone())?) {
-            self.execute(stmt.then_branch.clone())?;
-        } else if let Some(else_branch) = stmt.else_branch.clone() {
+    fn visit_if_stmt(&mut self, stmt: &Gc<stmt::If>) -> Result<()> {
+        if is_truthy(&*self.evaluate(&stmt.condition)?) {
+            self.execute(&stmt.then_branch)?;
+        } else if let Some(else_branch) = &stmt.else_branch {
             self.execute(else_branch)?;
         }
         Ok(())
     }
 
-    fn visit_print_stmt(&mut self, stmt: Gc<stmt::Print>) -> Result<()> {
-        let value = self.evaluate(stmt.expression.clone())?;
+    fn visit_print_stmt(&mut self, stmt: &Gc<stmt::Print>) -> Result<()> {
+        let value = self.evaluate(&stmt.expression)?;
         match &self.output {
             InterpreterOutput::ByteVec(v) => writeln!(v.borrow_mut(), "{value}")?,
             InterpreterOutput::StdOut => println!("{value}"),
@@ -219,17 +219,17 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_return_stmt(&mut self, stmt: Gc<stmt::Return>) -> Result<()> {
+    fn visit_return_stmt(&mut self, stmt: &Gc<stmt::Return>) -> Result<()> {
         let value = match &stmt.value {
-            Some(expr) => self.evaluate(expr.clone())?,
+            Some(expr) => self.evaluate(expr)?,
             None => Gc::new(ONil),
         };
 
         Err(Return::new(value).into())
     }
 
-    fn visit_var_stmt(&mut self, stmt: Gc<stmt::Var>) -> Result<()> {
-        let value = if let Some(initializer) = stmt.initializer.clone() {
+    fn visit_var_stmt(&mut self, stmt: &Gc<stmt::Var>) -> Result<()> {
+        let value = if let Some(initializer) = &stmt.initializer {
             self.evaluate(initializer)?
         } else {
             Gc::new(ONil)
@@ -239,29 +239,29 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_while_stmt(&mut self, stmt: Gc<stmt::While>) -> Result<()> {
-        while is_truthy(&*self.evaluate(stmt.condition.clone())?) {
-            self.execute(stmt.body.clone())?;
+    fn visit_while_stmt(&mut self, stmt: &Gc<stmt::While>) -> Result<()> {
+        while is_truthy(&*self.evaluate(&stmt.condition)?) {
+            self.execute(&stmt.body)?;
         }
         Ok(())
     }
 
-    fn visit_assign_expr(&mut self, expr: Gc<expr::Assign>) -> Result<Gc<Object>> {
-        let value = self.evaluate(expr.value.clone())?;
+    fn visit_assign_expr(&mut self, expr: &Gc<expr::Assign>) -> Result<Gc<Object>> {
+        let value = self.evaluate(&expr.value)?;
 
         if let Some(distance) = self.locals.get(&expr.id()) {
             self.environment
-                .assign_at(*distance, &expr.name, Gc::clone(&value));
+                .assign_at(*distance, &expr.name, value.clone());
         } else {
-            self.globals.assign(&expr.name, Gc::clone(&value))?;
+            self.globals.assign(&expr.name, value.clone())?;
         }
 
         Ok(value)
     }
 
-    fn visit_binary_expr(&mut self, expr: Gc<expr::Binary>) -> Result<Gc<Object>> {
-        let left = self.evaluate(expr.left.clone())?;
-        let right = self.evaluate(expr.right.clone())?;
+    fn visit_binary_expr(&mut self, expr: &Gc<expr::Binary>) -> Result<Gc<Object>> {
+        let left = self.evaluate(&expr.left)?;
+        let right = self.evaluate(&expr.right)?;
 
         let obj = match expr.operator.type_ {
             TT::BangEqual => OBoolean(!is_equal(&left, &right)),
@@ -310,9 +310,9 @@ impl Interpreter {
         Ok(Gc::new(obj))
     }
 
-    fn visit_call_expr(&mut self, expr: Gc<expr::Call>) -> Result<Gc<Object>> {
+    fn visit_call_expr(&mut self, expr: &Gc<expr::Call>) -> Result<Gc<Object>> {
         let callee = {
-            let callee = self.evaluate(expr.callee.clone())?;
+            let callee = self.evaluate(&expr.callee)?;
 
             if let OClass(class) = &*callee {
                 // TODO: it would be nice to drop this special case. This probably requires
@@ -323,13 +323,11 @@ impl Interpreter {
             }
         };
 
-        let arguments = {
-            let mut arguments = Vec::new();
-            for argument in expr.arguments.clone() {
-                arguments.push(self.evaluate(argument)?);
-            }
-            arguments
-        };
+        let arguments = expr
+            .arguments
+            .iter()
+            .map(|arg| self.evaluate(arg))
+            .collect::<Result<Vec<_>>>()?;
 
         if let OCallable(function) = &*callee {
             if arguments.len() != function.arity() {
@@ -354,24 +352,24 @@ impl Interpreter {
         }
     }
 
-    fn visit_get_expr(&mut self, expr: Gc<expr::Get>) -> Result<Gc<Object>> {
-        let object = self.evaluate(expr.object.clone())?;
+    fn visit_get_expr(&mut self, expr: &Gc<expr::Get>) -> Result<Gc<Object>> {
+        let object = self.evaluate(&expr.object)?;
         if let OInstance(instance) = &*object {
             return instance.get(&expr.name);
         }
         Err(RuntimeError::new(expr.name.clone(), "Only instances have properties.").into())
     }
 
-    fn visit_grouping_expr(&mut self, expr: Gc<expr::Grouping>) -> Result<Gc<Object>> {
-        self.evaluate(expr.expression.clone())
+    fn visit_grouping_expr(&mut self, expr: &Gc<expr::Grouping>) -> Result<Gc<Object>> {
+        self.evaluate(&expr.expression)
     }
 
-    fn visit_literal_expr(&mut self, expr: Gc<expr::Literal>) -> Result<Gc<Object>> {
+    fn visit_literal_expr(&mut self, expr: &Gc<expr::Literal>) -> Result<Gc<Object>> {
         Ok(expr.value.clone())
     }
 
-    fn visit_logical_expr(&mut self, expr: Gc<expr::Logical>) -> Result<Gc<Object>> {
-        let left = self.evaluate(expr.left.clone())?;
+    fn visit_logical_expr(&mut self, expr: &Gc<expr::Logical>) -> Result<Gc<Object>> {
+        let left = self.evaluate(&expr.left)?;
 
         match expr.operator.type_ {
             TT::Or => {
@@ -387,14 +385,14 @@ impl Interpreter {
             _ => unreachable!(),
         }
 
-        self.evaluate(expr.right.clone())
+        self.evaluate(&expr.right)
     }
 
-    fn visit_set_expr(&mut self, expr: Gc<expr::Set>) -> Result<Gc<Object>> {
-        let object = self.evaluate(expr.object.clone())?;
+    fn visit_set_expr(&mut self, expr: &Gc<expr::Set>) -> Result<Gc<Object>> {
+        let object = self.evaluate(&expr.object)?;
 
         if let OInstance(instance) = &*object {
-            let value = self.evaluate(expr.value.clone())?;
+            let value = self.evaluate(&expr.value)?;
             instance.set(&expr.name, value.clone());
             Ok(value)
         } else {
@@ -402,11 +400,12 @@ impl Interpreter {
         }
     }
 
-    fn visit_super_expr(&mut self, expr: Gc<expr::Super>) -> Result<Gc<Object>> {
+    fn visit_super_expr(&mut self, expr: &Gc<expr::Super>) -> Result<Gc<Object>> {
         let distance = self
             .locals
             .get(&expr.id())
             .expect("Expect a 'super' local if visiting a 'super' expr.");
+
         let superclass = {
             let obj = self.environment.get_at(*distance, "super");
             if let OClass(superclass) = &*obj {
@@ -438,12 +437,12 @@ impl Interpreter {
         .into())
     }
 
-    fn visit_this_expr(&self, expr: Gc<expr::This>) -> Result<Gc<Object>> {
+    fn visit_this_expr(&self, expr: &Gc<expr::This>) -> Result<Gc<Object>> {
         self.look_up_variable(&expr.keyword, expr.id())
     }
 
-    fn visit_unary_expr(&mut self, expr: Gc<expr::Unary>) -> Result<Gc<Object>> {
-        let right = self.evaluate(expr.right.clone())?;
+    fn visit_unary_expr(&mut self, expr: &Gc<expr::Unary>) -> Result<Gc<Object>> {
+        let right = self.evaluate(&expr.right)?;
 
         match expr.operator.type_ {
             TT::Bang => Ok(Gc::new(OBoolean(!is_truthy(&right)))),
@@ -455,7 +454,7 @@ impl Interpreter {
         }
     }
 
-    fn visit_variable_expr(&mut self, expr: Gc<expr::Variable>) -> Result<Gc<Object>> {
+    fn visit_variable_expr(&mut self, expr: &Gc<expr::Variable>) -> Result<Gc<Object>> {
         self.look_up_variable(&expr.name, expr.id())
     }
 
@@ -606,7 +605,7 @@ mod test {
         .unwrap();
 
         if let Stmt::Expression(expr_statement) = &statements[0] {
-            let res = interpreter.evaluate(expr_statement.expression.clone())?;
+            let res = interpreter.evaluate(&expr_statement.expression)?;
             assert_eq!(*res, Object::Number(-10.0));
         } else {
             panic!("Expected an expression statement");
