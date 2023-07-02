@@ -36,7 +36,7 @@ impl LoxInstance {
 
         Err(RuntimeError::new(
             name.clone().into(),
-            &format!("Undefined property {}.", &name.lexeme),
+            &format!("Undefined property '{}'.", &name.lexeme),
         )
         .into())
     }

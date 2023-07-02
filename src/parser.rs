@@ -399,7 +399,8 @@ where
             if self.match_(&[TT::LeftParen]) {
                 expr = self.finish_call(expr)?;
             } else if self.match_(&[TT::Dot]) {
-                let name = self.consume(TT::Identifier, "Expect property name after '.'")?;
+                let name =
+                    self.consume(TT::Identifier, "Expect property name after '.'.")?;
                 expr = expr::Get::make(expr, name);
             } else {
                 break;
