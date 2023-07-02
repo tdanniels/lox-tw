@@ -4,6 +4,8 @@ An implementation of the tree-walk Lox interpreter from Crafting Interpreters.
 The interpreter is feature complete and passes all of the tests available
 in the [author's repo](https://github.com/munificent/craftinginterpreters).
 
+Run Lox scripts with `cargo run $script`, or try out the REPL with `cargo run`.
+
 
 ### Notes
 
