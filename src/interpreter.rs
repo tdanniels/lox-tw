@@ -104,7 +104,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_block_stmt(&mut self, stmt: &Gc<stmt::Block>) -> Result<()> {
+    fn visit_block_stmt(&mut self, stmt: &stmt::Block) -> Result<()> {
         self.execute_block(
             &stmt.statements,
             Environment::new(Some(self.environment.clone())),
@@ -112,7 +112,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_class_stmt(&mut self, stmt: &Gc<stmt::Class>) -> Result<()> {
+    fn visit_class_stmt(&mut self, stmt: &stmt::Class) -> Result<()> {
         let superclass = if let Some(superclass) = stmt.superclass.clone() {
             if let OClass(ref c) = self.evaluate(&Expr::Variable(superclass.clone()))? {
                 Some(c.clone())
@@ -181,7 +181,7 @@ impl Interpreter {
         }
     }
 
-    fn visit_expression_stmt(&mut self, stmt: &Gc<stmt::Expression>) -> Result<()> {
+    fn visit_expression_stmt(&mut self, stmt: &stmt::Expression) -> Result<()> {
         self.evaluate(&stmt.expression)?;
         Ok(())
     }
@@ -197,7 +197,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_if_stmt(&mut self, stmt: &Gc<stmt::If>) -> Result<()> {
+    fn visit_if_stmt(&mut self, stmt: &stmt::If) -> Result<()> {
         if is_truthy(&self.evaluate(&stmt.condition)?) {
             self.execute(&stmt.then_branch)?;
         } else if let Some(else_branch) = &stmt.else_branch {
@@ -206,7 +206,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_print_stmt(&mut self, stmt: &Gc<stmt::Print>) -> Result<()> {
+    fn visit_print_stmt(&mut self, stmt: &stmt::Print) -> Result<()> {
         let value = self.evaluate(&stmt.expression)?;
         match &self.output {
             InterpreterOutput::ByteVec(v) => writeln!(v.borrow_mut(), "{value}")?,
@@ -215,7 +215,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_return_stmt(&mut self, stmt: &Gc<stmt::Return>) -> Result<()> {
+    fn visit_return_stmt(&mut self, stmt: &stmt::Return) -> Result<()> {
         let value = match &stmt.value {
             Some(expr) => self.evaluate(expr)?,
             None => ONil,
@@ -224,7 +224,7 @@ impl Interpreter {
         Err(Return::new(value).into())
     }
 
-    fn visit_var_stmt(&mut self, stmt: &Gc<stmt::Var>) -> Result<()> {
+    fn visit_var_stmt(&mut self, stmt: &stmt::Var) -> Result<()> {
         let value = if let Some(initializer) = &stmt.initializer {
             self.evaluate(initializer)?
         } else {
@@ -235,14 +235,14 @@ impl Interpreter {
         Ok(())
     }
 
-    fn visit_while_stmt(&mut self, stmt: &Gc<stmt::While>) -> Result<()> {
+    fn visit_while_stmt(&mut self, stmt: &stmt::While) -> Result<()> {
         while is_truthy(&self.evaluate(&stmt.condition)?) {
             self.execute(&stmt.body)?;
         }
         Ok(())
     }
 
-    fn visit_assign_expr(&mut self, expr: &Gc<expr::Assign>) -> Result<Object> {
+    fn visit_assign_expr(&mut self, expr: &expr::Assign) -> Result<Object> {
         let value = self.evaluate(&expr.value)?;
 
         if let Some(distance) = self.locals.get(&expr.id()) {
@@ -255,7 +255,7 @@ impl Interpreter {
         Ok(value)
     }
 
-    fn visit_binary_expr(&mut self, expr: &Gc<expr::Binary>) -> Result<Object> {
+    fn visit_binary_expr(&mut self, expr: &expr::Binary) -> Result<Object> {
         let left = self.evaluate(&expr.left)?;
         let right = self.evaluate(&expr.right)?;
 
@@ -306,7 +306,7 @@ impl Interpreter {
         Ok(obj)
     }
 
-    fn visit_call_expr(&mut self, expr: &Gc<expr::Call>) -> Result<Object> {
+    fn visit_call_expr(&mut self, expr: &expr::Call) -> Result<Object> {
         let callee = {
             let callee = self.evaluate(&expr.callee)?;
 
@@ -348,7 +348,7 @@ impl Interpreter {
         }
     }
 
-    fn visit_get_expr(&mut self, expr: &Gc<expr::Get>) -> Result<Object> {
+    fn visit_get_expr(&mut self, expr: &expr::Get) -> Result<Object> {
         let object = self.evaluate(&expr.object)?;
         if let OInstance(instance) = &object {
             return instance.get(&expr.name);
@@ -356,15 +356,15 @@ impl Interpreter {
         Err(RuntimeError::new(expr.name.clone(), "Only instances have properties.").into())
     }
 
-    fn visit_grouping_expr(&mut self, expr: &Gc<expr::Grouping>) -> Result<Object> {
+    fn visit_grouping_expr(&mut self, expr: &expr::Grouping) -> Result<Object> {
         self.evaluate(&expr.expression)
     }
 
-    fn visit_literal_expr(&mut self, expr: &Gc<expr::Literal>) -> Result<Object> {
+    fn visit_literal_expr(&mut self, expr: &expr::Literal) -> Result<Object> {
         Ok(expr.value.clone())
     }
 
-    fn visit_logical_expr(&mut self, expr: &Gc<expr::Logical>) -> Result<Object> {
+    fn visit_logical_expr(&mut self, expr: &expr::Logical) -> Result<Object> {
         let left = self.evaluate(&expr.left)?;
 
         match expr.operator.type_ {
@@ -384,7 +384,7 @@ impl Interpreter {
         self.evaluate(&expr.right)
     }
 
-    fn visit_set_expr(&mut self, expr: &Gc<expr::Set>) -> Result<Object> {
+    fn visit_set_expr(&mut self, expr: &expr::Set) -> Result<Object> {
         let object = self.evaluate(&expr.object)?;
 
         if let OInstance(instance) = &object {
@@ -396,7 +396,7 @@ impl Interpreter {
         }
     }
 
-    fn visit_super_expr(&mut self, expr: &Gc<expr::Super>) -> Result<Object> {
+    fn visit_super_expr(&mut self, expr: &expr::Super) -> Result<Object> {
         let distance = self
             .locals
             .get(&expr.id())
@@ -433,11 +433,11 @@ impl Interpreter {
         .into())
     }
 
-    fn visit_this_expr(&self, expr: &Gc<expr::This>) -> Result<Object> {
+    fn visit_this_expr(&self, expr: &expr::This) -> Result<Object> {
         self.look_up_variable(&expr.keyword, expr.id())
     }
 
-    fn visit_unary_expr(&mut self, expr: &Gc<expr::Unary>) -> Result<Object> {
+    fn visit_unary_expr(&mut self, expr: &expr::Unary) -> Result<Object> {
         let right = self.evaluate(&expr.right)?;
 
         match expr.operator.type_ {
@@ -450,7 +450,7 @@ impl Interpreter {
         }
     }
 
-    fn visit_variable_expr(&mut self, expr: &Gc<expr::Variable>) -> Result<Object> {
+    fn visit_variable_expr(&mut self, expr: &expr::Variable) -> Result<Object> {
         self.look_up_variable(&expr.name, expr.id())
     }
 
