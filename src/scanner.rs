@@ -54,7 +54,6 @@ where
 {
     /// Panics if `source` is not valid ASCII.
     pub fn new(source: &str, error_handler: F) -> Self {
-        assert!(source.is_ascii());
         Scanner {
             source: source.to_owned(),
             error_handler,
