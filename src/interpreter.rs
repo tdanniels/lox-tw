@@ -723,7 +723,7 @@ mod test {
             foo();
         ";
         let expected_output = "";
-        let expected_error_message = Some("Undefined variable a.");
+        let expected_error_message = Some("Undefined variable 'a'.");
         interpreter_test(source, expected_output, 1, expected_error_message)
     }
 

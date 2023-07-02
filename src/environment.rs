@@ -104,7 +104,7 @@ impl EnvironmentInternal {
 
         Err(RuntimeError::new(
             Gc::new(name.clone()),
-            &format!("Undefined variable {}.", name.lexeme),
+            &format!("Undefined variable '{}'.", name.lexeme),
         )
         .into())
     }
