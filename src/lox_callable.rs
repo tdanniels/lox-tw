@@ -93,6 +93,6 @@ impl Clock {
 
 impl Display for Clock {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<global fn>")
+        write!(f, "<native fn>")
     }
 }
