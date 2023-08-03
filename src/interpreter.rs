@@ -113,7 +113,7 @@ impl Interpreter {
     }
 
     fn visit_class_stmt(&mut self, stmt: &stmt::Class) -> Result<()> {
-        let superclass = if let Some(superclass) = stmt.superclass.clone() {
+        let superclass = if let Some(superclass) = &stmt.superclass {
             if let OClass(ref c) = self.evaluate(&Expr::Variable(superclass.clone()))? {
                 Some(c.clone())
             } else {
